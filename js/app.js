@@ -30,10 +30,13 @@ async function translateText() {
         });
 
         if (!response.ok) {
-            throw new Error('Błąd tłumaczenia');
+            const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+            console.error('API Error:', errorData);
+            throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
         }
 
         const data = await response.json();
+        console.log('Translation response:', data);
         document.getElementById('translatedText').value = data.translatedText;
 
         if (data.detectedLanguage) {
@@ -44,8 +47,8 @@ async function translateText() {
         loadHistory();
 
     } catch (error) {
-        console.error('Error:', error);
-        alert('Wystąpił błąd podczas tłumaczenia. Sprawdź czy API jest uruchomione.');
+        console.error('Translation error details:', error);
+        alert(`Wystąpił błąd podczas tłumaczenia: ${error.message}\n\nSprawdź konsolę przeglądarki (F12) aby zobaczyć szczegóły.`);
     } finally {
         loading.style.display = 'none';
     }
