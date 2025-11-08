@@ -1,12 +1,16 @@
 # Azure
 .azure/
 *.publish.xml
+local.settings.json
 
 # Node artifacts
 node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+dist/
+bin/
+obj/
 
 # Environment variables
 .env

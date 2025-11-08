@@ -1,0 +1,23 @@
+{
+  "name": "translator-api",
+  "version": "1.0.0",
+  "description": "Azure Functions API for Translation Management",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "prestart": "npm run build",
+    "start": "func start",
+    "test": "echo \"No tests yet\""
+  },
+  "dependencies": {
+    "@azure/storage-blob": "^12.17.0",
+    "@azure/cosmos": "^4.0.0",
+    "axios": "^1.6.0",
+    "parse-multipart-data": "^1.5.0"
+  },
+  "devDependencies": {
+    "@azure/functions": "^4.0.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  }
+}
