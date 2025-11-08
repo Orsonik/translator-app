@@ -1,0 +1,24 @@
+{
+  "navigationFallback": {
+    "rewrite": "/index.html",
+    "exclude": ["/assets/*", "/css/*", "/js/*"]
+  },
+  "mimeTypes": {
+    ".json": "application/json",
+    ".css": "text/css",
+    ".js": "text/javascript",
+    ".html": "text/html",
+    ".jpg": "image/jpeg",
+    ".png": "image/png",
+    ".ico": "image/x-icon"
+  },
+  "globalHeaders": {
+    "cache-control": "public, max-age=3600"
+  },
+  "responseOverrides": {
+    "404": {
+      "rewrite": "/index.html",
+      "statusCode": 404
+    }
+  }
+}
