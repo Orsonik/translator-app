@@ -1,144 +1,210 @@
-# Bootstrap Grayscale Theme - Azure Static Web App
+# Translator Manager - System Zarządzania Tłumaczeniami
 
-Prosta aplikacja webowa wykorzystująca theme Bootstrap Grayscale, przygotowana do wdrożenia na Azure Static Web Apps.
+Aplikacja webowa do zarządzania tłumaczeniami i plikami, zbudowana na Azure Static Web Apps z wykorzystaniem Azure Translator Service.
 
-## Struktura projektu
+## 🌟 Funkcjonalności
+
+- **Tłumaczenie tekstu** - tłumaczenie tekstu między różnymi językami przy użyciu Azure Translator
+- **Zarządzanie plikami** - wgrywanie i przechowywanie plików do tłumaczenia
+- **Historia tłumaczeń** - przeglądanie historii wszystkich wykonanych tłumaczeń
+- **Automatyczne wykrywanie języka** - opcjonalne automatyczne wykrywanie języka źródłowego
+- **Responsywny interfejs** - działający na urządzeniach mobilnych i desktopowych
+
+## 🏗️ Architektura
+
+### Frontend
+- **Azure Static Web Apps** - hosting aplikacji webowej
+- **Bootstrap 5** - responsywny framework CSS
+- **Vanilla JavaScript** - logika interfejsu użytkownika
+
+### Backend
+- **Azure Functions** - serverless API (Node.js + TypeScript)
+- **Azure Translator Service** - tłumaczenie tekstów
+- **Azure Blob Storage** - przechowywanie plików
+- **Azure Cosmos DB** - baza danych NoSQL dla metadanych
+
+## 🚀 Wdrożenie
+
+### Wymagania
+- Konto Azure
+- Konto GitHub
+- Azure CLI (opcjonalnie)
+
+### Zasoby Azure
+
+Projekt wykorzystuje następujące zasoby w Azure:
+- **Resource Group**: `translator-rg` (Poland Central)
+- **Static Web App**: `translator-app` (West Europe)
+- **Translator Service**: `translator-service-pl` (West Europe, SKU: S1)
+- **Storage Account**: `translatorstoragepl` (Poland Central)
+- **Cosmos DB**: `translator-db-pl` (Poland Central)
+
+### Deployment
+
+Aplikacja jest automatycznie wdrażana przez GitHub Actions przy każdym pushu do gałęzi `main`.
+
+#### Konfiguracja GitHub Secrets
+
+Dodaj następujące secrets w GitHub:
+```
+AZURE_STATIC_WEB_APPS_API_TOKEN
+TRANSLATOR_KEY
+COSMOS_ENDPOINT
+COSMOS_KEY
+AZURE_STORAGE_CONNECTION_STRING
+```
+
+### Lokalne uruchomienie
+
+#### Frontend
+1. Otwórz `translator.html` w przeglądarce lub użyj live server
+
+#### API (Azure Functions)
+1. Zainstaluj zależności:
+```bash
+cd api
+npm install
+```
+
+2. Skonfiguruj `local.settings.json` z kluczami Azure
+
+3. Uruchom Functions:
+```bash
+npm start
+```
+
+## 📚 API Endpoints
+
+### `POST /api/translateText`
+Tłumaczy tekst
+
+**Request Body:**
+```json
+{
+  "text": "Hello world",
+  "targetLanguage": "pl",
+  "sourceLanguage": "en"
+}
+```
+
+**Response:**
+```json
+{
+  "translatedText": "Witaj świecie",
+  "detectedLanguage": { "language": "en", "score": 1.0 },
+  "translationId": "trans-123"
+}
+```
+
+### `POST /api/uploadFile`
+Wgrywa plik
+
+**Request:** multipart/form-data
+
+**Response:**
+```json
+{
+  "message": "File uploaded successfully",
+  "fileName": "document.pdf",
+  "fileId": "file-123"
+}
+```
+
+### `GET /api/getFiles`
+Pobiera listę plików
+
+**Response:**
+```json
+{
+  "files": [...],
+  "count": 5
+}
+```
+
+### `GET /api/getTranslations`
+Pobiera historię tłumaczeń
+
+**Response:**
+```json
+{
+  "translations": [...],
+  "count": 10
+}
+```
+
+## 🌐 URL Produkcyjny
+
+**Aplikacja**: https://red-stone-0f1cfc203.3.azurestaticapps.net
+
+- Strona główna: `/index.html`
+- Aplikacja tłumaczeniowa: `/translator.html`
+
+## 📦 Struktura Projektu
 
 ```
 translator/
-├── index.html              # Główna strona aplikacji
-├── assets/                 # Zasoby statyczne (obrazy, ikony)
-│   ├── favicon.ico
-│   └── img/
-├── css/                    # Arkusze stylów
-│   └── styles.css
-├── js/                     # Pliki JavaScript
-│   └── scripts.js
-├── staticwebapp.config.json # Konfiguracja Azure Static Web Apps
-├── .gitignore
-└── README.md
+├── index.html                 # Strona powitalna
+├── translator.html            # Aplikacja tłumaczeniowa
+├── assets/                    # Zasoby statyczne
+├── css/                       # Style CSS
+├── js/
+│   ├── scripts.js            # Skrypty Bootstrap theme
+│   └── app.js                # Logika aplikacji
+├── api/                       # Azure Functions API
+│   ├── src/functions/
+│   │   ├── translateText.ts
+│   │   ├── uploadFile.ts
+│   │   ├── getFiles.ts
+│   │   └── getTranslations.ts
+│   ├── package.json
+│   ├── tsconfig.json
+│   └── host.json
+├── .github/workflows/         # GitHub Actions
+└── staticwebapp.config.json   # Konfiguracja SWA
 ```
 
-## Wdrożenie na Azure Static Web Apps
+## 🔐 Bezpieczeństwo
 
-### Metoda 1: Wdrożenie przez Azure Portal (zalecane dla początkujących)
+- Wszystkie klucze przechowywane jako GitHub Secrets
+- Połączenia HTTPS
+- Azure Managed Identity dla dostępu do zasobów
+- Walidacja po stronie API
 
-1. **Zaloguj się do Azure Portal**: https://portal.azure.com
+## 📊 Koszty
 
-2. **Utwórz nowy Static Web App**:
-   - Kliknij "Create a resource"
-   - Wyszukaj "Static Web App"
-   - Kliknij "Create"
+### Free Tier
+- Azure Static Web Apps: Free tier (bezpłatny)
 
-3. **Wypełnij formularz**:
-   - **Subscription**: Wybierz swoją subskrypcję
-   - **Resource Group**: Utwórz nową lub wybierz istniejącą
-   - **Name**: Podaj unikalną nazwę (np. `translator-app`)
-   - **Region**: Wybierz najbliższy region (np. West Europe)
-   - **Source**: Wybierz "GitHub" lub "Azure DevOps"
-   - **GitHub account**: Zaloguj się do GitHub i autoryzuj Azure
-   - **Organization**: Wybierz swoją organizację
-   - **Repository**: Wybierz repozytorium z tym projektem
-   - **Branch**: Wybierz gałąź (np. `main` lub `master`)
+### Paid Resources
+- Azure Translator: S1 tier (~$10/miesiąc za 2M znaków)
+- Cosmos DB: ~$24/miesiąc (400 RU/s)
+- Storage Account: ~$0.02/GB/miesiąc
 
-4. **Build Details**:
-   - **Build Presets**: Wybierz "Custom"
-   - **App location**: `/` (katalog główny)
-   - **Api location**: pozostaw puste (brak API na razie)
-   - **Output location**: `/` (wszystkie pliki są w katalogu głównym)
+**Szacowany koszt miesięczny**: ~$35-40 USD przy normalnym użytkowaniu
 
-5. **Kliknij "Review + Create"**, a następnie **"Create"**
+## 🛠️ Technologie
 
-6. Po utworzeniu, Azure automatycznie:
-   - Utworzy GitHub Action workflow w Twoim repozytorium
-   - Zbuduje i wdroży aplikację
-   - Udostępni URL aplikacji (np. `https://nice-sea-xxx.azurestaticapps.net`)
+- **Frontend**: HTML5, CSS3, JavaScript (ES6+), Bootstrap 5
+- **Backend**: Azure Functions, Node.js, TypeScript
+- **Bazy danych**: Azure Cosmos DB (NoSQL)
+- **Storage**: Azure Blob Storage
+- **AI/ML**: Azure Translator Service (Cognitive Services)
+- **Hosting**: Azure Static Web Apps
+- **CI/CD**: GitHub Actions
 
-### Metoda 2: Wdrożenie przez Azure CLI
+## 📝 Licencja
 
-1. **Zainstaluj Azure CLI**: https://docs.microsoft.com/cli/azure/install-azure-cli
+Bootstrap Grayscale Theme - MIT License
 
-2. **Zaloguj się do Azure**:
-   ```bash
-   az login
-   ```
+## 👥 Autorzy
 
-3. **Utwórz Resource Group** (jeśli nie istnieje):
-   ```bash
-   az group create --name translator-rg --location westeurope
-   ```
+Projekt stworzony jako demo aplikacji Azure Static Web Apps z Azure Translator Service.
 
-4. **Utwórz Static Web App**:
-   ```bash
-   az staticwebapp create \
-     --name translator-app \
-     --resource-group translator-rg \
-     --source https://github.com/TWOJA-ORGANIZACJA/TWOJE-REPO \
-     --location westeurope \
-     --branch main \
-     --app-location "/" \
-     --output-location "/" \
-     --login-with-github
-   ```
+## 🤝 Contributing
 
-### Metoda 3: Wdrożenie przez VS Code
+Pull requesty są mile widziane! Dla większych zmian proszę najpierw otworzyć issue.
 
-1. **Zainstaluj rozszerzenie**: "Azure Static Web Apps" w VS Code
+## 📞 Kontakt
 
-2. **Otwórz paletę poleceń** (Ctrl+Shift+P / Cmd+Shift+P)
+Dla pytań i sugestii proszę otworzyć issue na GitHub.
 
-3. **Wpisz**: "Azure Static Web Apps: Create Static Web App..."
-
-4. **Postępuj zgodnie z instrukcjami**:
-   - Wybierz subskrypcję
-   - Podaj nazwę aplikacji
-   - Wybierz region
-   - Wybierz "Custom" jako build preset
-   - App location: `/`
-   - Output location: `/`
-
-## Lokalne testowanie
-
-Możesz przetestować aplikację lokalnie, otwierając `index.html` w przeglądarce lub używając prostego serwera HTTP:
-
-### Python:
-```bash
-python -m http.server 8000
-```
-
-### Node.js (http-server):
-```bash
-npx http-server
-```
-
-### VS Code Live Server:
-- Zainstaluj rozszerzenie "Live Server"
-- Kliknij prawym przyciskiem na `index.html`
-- Wybierz "Open with Live Server"
-
-## Konfiguracja
-
-Plik `staticwebapp.config.json` zawiera konfigurację dla Azure Static Web Apps:
-- Routing i przekierowania
-- Typy MIME
-- Nagłówki cache
-- Obsługa błędów 404
-
-## Następne kroki
-
-Po wdrożeniu możesz rozbudować aplikację o:
-- Azure Functions (API backend)
-- Uwierzytelnianie (Azure AD, GitHub, Twitter, itp.)
-- Niestandardową domenę
-- SSL/TLS
-- CI/CD pipeline
-
-## Linki pomocnicze
-
-- [Dokumentacja Azure Static Web Apps](https://docs.microsoft.com/azure/static-web-apps/)
-- [Bootstrap Grayscale Theme](https://startbootstrap.com/theme/grayscale/)
-- [Azure Portal](https://portal.azure.com)
-
-## Licencja
-
-Bootstrap Grayscale Theme jest projektem open source na licencji MIT.
