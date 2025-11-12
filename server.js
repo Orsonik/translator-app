@@ -17,7 +17,14 @@ const upload = multer({
 
 // Middleware
 app.use(express.json());
-app.use(express.static(__dirname)); // Serve static files from root
+
+// Redirect root to translator app (BEFORE static files)
+app.get('/', (req, res) => {
+    res.redirect('/translator.html');
+});
+
+// Serve static files from root
+app.use(express.static(__dirname));
 
 // Azure configuration
 const storageAccountName = 'translatorstoragepl';
@@ -226,6 +233,11 @@ app.get('/api/getTranslations', async (req, res) => {
 // Redirect root to translator app
 app.get('/', (req, res) => {
     res.redirect('/translator.html');
+});
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+    res.json({ status: 'healthy', timestamp: new Date().toISOString() });
 });
 
 // Start server
