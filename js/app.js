@@ -152,33 +152,54 @@ async function loadFiles() {
         console.log('Files data received:', data);
         const filesList = document.getElementById('filesList');
 
-        if (data.files && data.files.length > 0) {
-            console.log(`Displaying ${data.files.length} files`);
-            filesList.innerHTML = data.files.map(file => {
-                const statusBadge = file.status === 'translated' 
-                    ? '<span class="badge bg-info">Przetłumaczony</span>'
-                    : '<span class="badge bg-success">Oryginalny</span>';
-                const containerBadge = file.container === 'translated-files'
-                    ? '<i class="fas fa-language ms-2"></i>'
-                    : '<i class="fas fa-file-upload ms-2"></i>';
-                
-                return `
-                    <div class="file-item">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <h5 class="text-white mb-1">
-                                    <i class="fas fa-file"></i> ${file.fileName} ${containerBadge}
-                                </h5>
-                                <p class="text-white-50 mb-0">
-                                    <small>Wgrano: ${new Date(file.uploadDate).toLocaleString('pl-PL')}</small>
-                                    <small class="ms-3">Rozmiar: ${(file.size / 1024).toFixed(2)} KB</small>
-                                </p>
-                            </div>
-                            ${statusBadge}
-                        </div>
-                    </div>
-                `;
-            }).join('');
+        if (data.fileGroups && data.fileGroups.length > 0) {
+            console.log(`Displaying ${data.fileGroups.length} file groups`);
+            filesList.innerHTML = `
+                <div class="table-responsive">
+                    <table class="table table-dark table-hover">
+                        <thead>
+                            <tr>
+                                <th style="width: 45%">Oryginalny plik</th>
+                                <th style="width: 45%">Tłumaczenia</th>
+                                <th style="width: 10%">Akcje</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${data.fileGroups.map(group => `
+                                <tr>
+                                    <td>
+                                        <div>
+                                            <i class="fas fa-file text-primary"></i> 
+                                            <strong>${group.originalFile.displayName}</strong>
+                                        </div>
+                                        <small class="text-white-50">
+                                            ${new Date(group.originalFile.uploadDate).toLocaleString('pl-PL')} | 
+                                            ${(group.originalFile.size / 1024).toFixed(2)} KB
+                                        </small>
+                                    </td>
+                                    <td>
+                                        ${group.translations.length > 0 
+                                            ? group.translations.map(trans => `
+                                                <div class="mb-1">
+                                                    <span class="badge bg-info me-2">${trans.language.toUpperCase()}</span>
+                                                    <small class="text-white-50">${trans.fileName}</small>
+                                                    <small class="text-white-50 ms-2">${(trans.size / 1024).toFixed(2)} KB</small>
+                                                </div>
+                                            `).join('')
+                                            : '<small class="text-white-50">Brak tłumaczeń</small>'
+                                        }
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-success" onclick="translateExistingFile('${group.originalFile.fileName}', '${group.originalFile.displayName}')" title="Przetłumacz plik">
+                                            <i class="fas fa-language"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
         } else {
             console.log('No files found, showing empty message');
             filesList.innerHTML = '<p class="text-white-50 text-center">Brak wgranych plików</p>';
@@ -388,4 +409,65 @@ function downloadTranslatedFile() {
     document.body.removeChild(a);
     
     console.log('File downloaded:', fileName);
+}
+
+// Translate existing file from library
+async function translateExistingFile(fileName, displayName) {
+    // Prompt user for target language
+    const languages = [
+        { code: 'en', name: 'Angielski' },
+        { code: 'pl', name: 'Polski' },
+        { code: 'de', name: 'Niemiecki' },
+        { code: 'fr', name: 'Francuski' },
+        { code: 'es', name: 'Hiszpański' },
+        { code: 'it', name: 'Włoski' },
+        { code: 'ru', name: 'Rosyjski' },
+        { code: 'uk', name: 'Ukraiński' },
+        { code: 'cs', name: 'Czeski' }
+    ];
+
+    const languageOptions = languages.map(lang => `${lang.code}: ${lang.name}`).join('\n');
+    const targetLanguage = prompt(`Wybierz język docelowy dla pliku:\n${displayName}\n\nDostępne języki:\n${languageOptions}\n\nWpisz kod języka (np. en, pl, de):`);
+
+    if (!targetLanguage) {
+        return; // User cancelled
+    }
+
+    // Validate language code
+    if (!languages.find(lang => lang.code === targetLanguage.toLowerCase())) {
+        alert('Nieprawidłowy kod języka. Użyj jednego z: ' + languages.map(l => l.code).join(', '));
+        return;
+    }
+
+    try {
+        console.log('Translating existing file:', fileName, 'to', targetLanguage);
+
+        const response = await fetch(`${API_BASE}/translateExistingFile`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                fileName: fileName,
+                targetLanguage: targetLanguage.toLowerCase()
+            })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || 'Translation failed');
+        }
+
+        const result = await response.json();
+        console.log('Translation result:', result);
+
+        alert(`Plik został przetłumaczony!\nJęzyk: ${result.language}\nPlik: ${result.translatedFileName}`);
+        
+        // Reload files list to show new translation
+        loadFiles();
+
+    } catch (error) {
+        console.error('Error translating existing file:', error);
+        alert('Błąd podczas tłumaczenia pliku: ' + error.message);
+    }
 }

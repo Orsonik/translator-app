@@ -381,19 +381,18 @@ app.get('/api/getFiles', async (req, res) => {
     console.log('Get files request received');
     
     try {
-        const files = [];
+        const sourceFiles = [];
+        const translatedFiles = [];
         
         // Get files from source-files container
         const sourceContainerClient = blobServiceClient.getContainerClient(containerName);
         console.log('Listing source files with Managed Identity...');
         
         for await (const blob of sourceContainerClient.listBlobsFlat()) {
-            files.push({
+            sourceFiles.push({
                 fileName: blob.name,
                 size: blob.properties.contentLength,
                 uploadDate: blob.properties.lastModified,
-                status: 'uploaded',
-                container: 'source-files',
                 blobUrl: `https://${storageAccountName}.blob.core.windows.net/${containerName}/${blob.name}`
             });
         }
@@ -403,28 +402,244 @@ app.get('/api/getFiles', async (req, res) => {
         console.log('Listing translated files with Managed Identity...');
         
         for await (const blob of translatedContainerClient.listBlobsFlat()) {
-            files.push({
+            translatedFiles.push({
                 fileName: blob.name,
                 size: blob.properties.contentLength,
                 uploadDate: blob.properties.lastModified,
-                status: 'translated',
-                container: 'translated-files',
                 blobUrl: `https://${storageAccountName}.blob.core.windows.net/translated-files/${blob.name}`
             });
         }
 
+        // Group files: match translated files with their source files
+        const fileGroups = [];
+        
+        sourceFiles.forEach(sourceFile => {
+            // Extract original filename without timestamp
+            const match = sourceFile.fileName.match(/^\d+_(.*)/);
+            const originalName = match ? match[1] : sourceFile.fileName;
+            
+            // Find all translations for this file
+            const translations = translatedFiles.filter(tf => {
+                // Translated files format: timestamp_translated_LANG_originalname.txt
+                const translatedMatch = tf.fileName.match(/^\d+_translated_([a-z]{2})_(.*?)\.txt$/);
+                if (!translatedMatch) return false;
+                
+                const [, language, baseName] = translatedMatch;
+                // Remove extension from original name for comparison
+                const baseOriginalName = originalName.replace(/\.[^/.]+$/, '');
+                return baseName === baseOriginalName;
+            }).map(tf => {
+                const translatedMatch = tf.fileName.match(/^\d+_translated_([a-z]{2})_(.*?)\.txt$/);
+                return {
+                    fileName: tf.fileName,
+                    language: translatedMatch ? translatedMatch[1] : 'unknown',
+                    size: tf.size,
+                    uploadDate: tf.uploadDate,
+                    blobUrl: tf.blobUrl
+                };
+            });
+
+            fileGroups.push({
+                originalFile: {
+                    fileName: sourceFile.fileName,
+                    displayName: originalName,
+                    size: sourceFile.size,
+                    uploadDate: sourceFile.uploadDate,
+                    blobUrl: sourceFile.blobUrl
+                },
+                translations: translations
+            });
+        });
+
         // Sort by upload date (newest first)
-        files.sort((a, b) => new Date(b.uploadDate) - new Date(a.uploadDate));
+        fileGroups.sort((a, b) => new Date(b.originalFile.uploadDate) - new Date(a.originalFile.uploadDate));
 
-        console.log(`Found ${files.length} files total`);
+        console.log(`Found ${sourceFiles.length} source files and ${translatedFiles.length} translated files`);
+        console.log(`Grouped into ${fileGroups.length} file groups`);
 
-        res.json({ files });
+        res.json({ fileGroups });
 
     } catch (error) {
         console.error('Error fetching files:', error.message);
-        res.json({ files: [], error: error.message });
+        res.json({ fileGroups: [], error: error.message });
     }
 });
+
+// Translate existing file from library
+app.post('/api/translateExistingFile', async (req, res) => {
+    console.log('Translate existing file request received');
+    
+    try {
+        const { fileName, targetLanguage } = req.body;
+        
+        if (!fileName || !targetLanguage) {
+            return res.status(400).json({ error: 'Missing fileName or targetLanguage' });
+        }
+
+        console.log('Translating existing file:', fileName, 'to', targetLanguage);
+
+        // Download file from source-files container
+        const sourceContainerClient = blobServiceClient.getContainerClient(containerName);
+        const blobClient = sourceContainerClient.getBlobClient(fileName);
+        
+        const downloadResponse = await blobClient.download();
+        const fileData = await streamToBuffer(downloadResponse.readableStreamBody);
+        
+        // Extract original filename and extension
+        const match = fileName.match(/^\d+_(.*)/);
+        const originalFileName = match ? match[1] : fileName;
+        const fileExtension = originalFileName.split('.').pop().toLowerCase();
+
+        console.log('Downloaded file:', originalFileName, 'size:', fileData.length);
+
+        // Extract text based on file type (same logic as uploadFile)
+        let textToTranslate = '';
+        
+        if (fileExtension === 'txt') {
+            textToTranslate = fileData.toString('utf-8');
+        } else if (fileExtension === 'docx' || fileExtension === 'doc') {
+            const result = await mammoth.extractRawText({ buffer: fileData });
+            textToTranslate = result.value;
+        } else if (fileExtension === 'pdf') {
+            const pdfData = await pdfParse(fileData);
+            textToTranslate = pdfData.text;
+        } else {
+            return res.status(400).json({ 
+                error: 'Unsupported file format',
+                message: 'Supported formats: .txt, .doc, .docx, .pdf'
+            });
+        }
+
+        if (!textToTranslate || textToTranslate.trim().length === 0) {
+            return res.status(400).json({
+                error: 'No text extracted',
+                message: 'The file appears to be empty or contains no extractable text.'
+            });
+        }
+
+        console.log('Extracted text length:', textToTranslate.length);
+
+        // Translate text (with chunking for large files)
+        const maxChunkSize = 5000;
+        let translatedText = '';
+        
+        if (textToTranslate.length <= maxChunkSize) {
+            const response = await axios({
+                baseURL: translatorEndpoint,
+                url: '/translate',
+                method: 'post',
+                headers: {
+                    'Ocp-Apim-Subscription-Key': translatorKey,
+                    'Ocp-Apim-Subscription-Region': translatorRegion,
+                    'Content-type': 'application/json'
+                },
+                params: {
+                    'api-version': '3.0',
+                    'to': targetLanguage
+                },
+                data: [{
+                    'text': textToTranslate
+                }],
+                responseType: 'json'
+            });
+
+            translatedText = response.data[0].translations[0].text;
+        } else {
+            const chunks = [];
+            for (let i = 0; i < textToTranslate.length; i += maxChunkSize) {
+                chunks.push(textToTranslate.substring(i, i + maxChunkSize));
+            }
+            
+            for (let i = 0; i < chunks.length; i++) {
+                const response = await axios({
+                    baseURL: translatorEndpoint,
+                    url: '/translate',
+                    method: 'post',
+                    headers: {
+                        'Ocp-Apim-Subscription-Key': translatorKey,
+                        'Ocp-Apim-Subscription-Region': translatorRegion,
+                        'Content-type': 'application/json'
+                    },
+                    params: {
+                        'api-version': '3.0',
+                        'to': targetLanguage
+                    },
+                    data: [{
+                        'text': chunks[i]
+                    }],
+                    responseType: 'json'
+                });
+                
+                translatedText += response.data[0].translations[0].text;
+            }
+        }
+
+        console.log('Translation completed, text length:', translatedText.length);
+
+        // Save translated file
+        const baseFileName = originalFileName.substring(0, originalFileName.lastIndexOf('.')) || originalFileName;
+        const timestamp = Date.now();
+        const translatedFileName = `${timestamp}_translated_${targetLanguage}_${baseFileName}.txt`;
+        const translatedBuffer = Buffer.from(translatedText, 'utf-8');
+
+        const translatedContainerClient = blobServiceClient.getContainerClient('translated-files');
+        const blockBlobClient = translatedContainerClient.getBlockBlobClient(translatedFileName);
+        
+        await blockBlobClient.upload(translatedBuffer, translatedBuffer.length, {
+            blobHTTPHeaders: {
+                blobContentType: 'text/plain; charset=utf-8'
+            }
+        });
+        
+        console.log('Translated file saved:', translatedFileName);
+
+        // Save to Cosmos DB
+        const translationRecord = {
+            id: `file_${timestamp}`,
+            type: 'file',
+            originalFileName: originalFileName,
+            translatedFileName: translatedFileName,
+            sourceLanguage: 'auto',
+            targetLanguage: targetLanguage,
+            originalSize: fileData.length,
+            translatedSize: translatedBuffer.length,
+            textLength: textToTranslate.length,
+            fileType: fileExtension,
+            timestamp: new Date().toISOString()
+        };
+
+        await container.items.create(translationRecord);
+        console.log('File translation record saved to Cosmos DB');
+
+        res.json({ 
+            success: true,
+            translatedFileName: translatedFileName,
+            language: targetLanguage,
+            message: 'File translated successfully'
+        });
+
+    } catch (error) {
+        console.error('Error translating existing file:', error);
+        res.status(500).json({ 
+            error: error.message || 'Internal server error',
+            message: 'File translation failed. Please try again.'
+        });
+    }
+});
+
+// Helper function to convert stream to buffer
+async function streamToBuffer(readableStream) {
+    return new Promise((resolve, reject) => {
+        const chunks = [];
+        readableStream.on('data', (data) => {
+            chunks.push(data instanceof Buffer ? data : Buffer.from(data));
+        });
+        readableStream.on('end', () => {
+            resolve(Buffer.concat(chunks));
+        });
+        readableStream.on('error', reject);
+    });
+}
 
 // Get translations history endpoint
 app.get('/api/getTranslations', async (req, res) => {
