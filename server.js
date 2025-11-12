@@ -177,6 +177,106 @@ app.post('/api/uploadFile', upload.single('file'), async (req, res) => {
     }
 });
 
+// Translate file endpoint
+app.post('/api/translateFile', upload.single('file'), async (req, res) => {
+    console.log('Translate file request received');
+    
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'No file uploaded' });
+        }
+
+        const targetLanguage = req.body.targetLanguage || 'en';
+        const fileName = req.file.originalname;
+        const fileData = req.file.buffer;
+        const fileExtension = fileName.split('.').pop().toLowerCase();
+
+        console.log('File to translate:', {
+            fileName,
+            size: fileData.length,
+            targetLanguage,
+            extension: fileExtension
+        });
+
+        // Extract text from file based on type
+        let textToTranslate = '';
+        
+        if (fileExtension === 'txt') {
+            // Plain text file
+            textToTranslate = fileData.toString('utf-8');
+        } else {
+            // For now, only support .txt files
+            // In future, add support for .docx, .pdf using libraries like mammoth, pdf-parse
+            return res.status(400).json({ 
+                error: 'Unsupported file format',
+                message: 'Currently only .txt files are supported. Support for .docx and .pdf coming soon.'
+            });
+        }
+
+        console.log('Extracted text length:', textToTranslate.length);
+
+        // Translate text using Azure Translator
+        const response = await axios({
+            baseURL: translatorEndpoint,
+            url: '/translate',
+            method: 'post',
+            headers: {
+                'Ocp-Apim-Subscription-Key': translatorKey,
+                'Ocp-Apim-Subscription-Region': translatorRegion,
+                'Content-type': 'application/json'
+            },
+            params: {
+                'api-version': '3.0',
+                'to': targetLanguage
+            },
+            data: [{
+                'text': textToTranslate
+            }],
+            responseType: 'json'
+        });
+
+        const translatedText = response.data[0].translations[0].text;
+        console.log('Translation completed, text length:', translatedText.length);
+
+        // Create translated file
+        const translatedFileName = `translated_${targetLanguage}_${fileName}`;
+        const translatedBuffer = Buffer.from(translatedText, 'utf-8');
+
+        // Optional: Upload translated file to Blob Storage
+        try {
+            const translatedContainerClient = blobServiceClient.getContainerClient('translated-files');
+            const blockBlobClient = translatedContainerClient.getBlockBlobClient(translatedFileName);
+            
+            await blockBlobClient.upload(translatedBuffer, translatedBuffer.length, {
+                blobHTTPHeaders: {
+                    blobContentType: 'text/plain; charset=utf-8'
+                }
+            });
+            
+            console.log('Translated file uploaded to storage:', translatedFileName);
+        } catch (storageError) {
+            console.error('Failed to upload translated file to storage (non-critical):', storageError.message);
+        }
+
+        // Return translated file
+        res.set({
+            'Content-Type': 'text/plain; charset=utf-8',
+            'Content-Disposition': `attachment; filename="${translatedFileName}"`,
+            'Content-Length': translatedBuffer.length
+        });
+        res.send(translatedBuffer);
+
+        console.log('Translated file sent successfully');
+
+    } catch (error) {
+        console.error('Error translating file:', error);
+        res.status(500).json({ 
+            error: error.message || 'Internal server error',
+            message: 'File translation failed. Please try again.'
+        });
+    }
+});
+
 // Get files list endpoint
 app.get('/api/getFiles', async (req, res) => {
     console.log('Get files request received');

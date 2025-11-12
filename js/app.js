@@ -2,6 +2,8 @@
 const API_BASE = '/api';  // Dla lokalnego developmentu
 // const API_BASE = 'https://translator-app.azurewebsites.net/api';  // Dla production
 
+let translatedFileBlob = null; // Store translated file
+
 // Translate text function
 async function translateText() {
     const sourceText = document.getElementById('sourceText').value;
@@ -237,3 +239,113 @@ document.getElementById('sourceText')?.addEventListener('keypress', function(e) 
         translateText();
     }
 });
+
+// ===== FILE TRANSLATION FUNCTIONS =====
+
+// Select file for translation
+function selectTranslateFile() {
+    document.getElementById('translateFileInput').click();
+}
+
+// Handle file selection for translation
+document.getElementById('translateFileInput')?.addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (file) {
+        // Validate file size (max 10MB)
+        if (file.size > 10 * 1024 * 1024) {
+            alert('Plik jest za duży. Maksymalny rozmiar to 10MB.');
+            return;
+        }
+
+        // Show file info
+        document.getElementById('translateFileName').textContent = file.name;
+        document.getElementById('translateFileSize').textContent = `(${(file.size / 1024).toFixed(2)} KB)`;
+        document.getElementById('translateFileInfo').style.display = 'block';
+        document.getElementById('fileLanguageSelector').style.display = 'flex';
+        document.getElementById('translateFileButton').style.display = 'inline-block';
+        document.getElementById('translateFileResult').style.display = 'none';
+    }
+});
+
+// Translate file function
+async function translateFile() {
+    const fileInput = document.getElementById('translateFileInput');
+    const targetLang = document.getElementById('fileTargetLanguage').value;
+    
+    if (!fileInput.files[0]) {
+        alert('Proszę wybrać plik');
+        return;
+    }
+
+    const file = fileInput.files[0];
+    const loading = document.getElementById('translateFileLoading');
+    loading.style.display = 'block';
+
+    console.log('Translating file:', file.name, 'Size:', file.size, 'Target language:', targetLang);
+
+    try {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('targetLanguage', targetLang);
+
+        console.log('Sending file translation request...');
+
+        const response = await fetch(`${API_BASE}/translateFile`, {
+            method: 'POST',
+            body: formData
+        });
+
+        console.log('File translation response status:', response.status);
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Translation failed');
+        }
+
+        // Get the translated file as blob
+        translatedFileBlob = await response.blob();
+        
+        // Extract filename from Content-Disposition header or use default
+        const contentDisposition = response.headers.get('Content-Disposition');
+        let fileName = 'translated_' + file.name;
+        if (contentDisposition) {
+            const fileNameMatch = contentDisposition.match(/filename="(.+)"/);
+            if (fileNameMatch) {
+                fileName = fileNameMatch[1];
+            }
+        }
+
+        console.log('File translated successfully:', fileName);
+
+        // Show result
+        document.getElementById('translatedFileName').textContent = fileName;
+        document.getElementById('translateFileResult').style.display = 'block';
+
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Błąd podczas tłumaczenia pliku: ' + error.message);
+    } finally {
+        loading.style.display = 'none';
+    }
+}
+
+// Download translated file
+function downloadTranslatedFile() {
+    if (!translatedFileBlob) {
+        alert('Brak przetłumaczonego pliku do pobrania');
+        return;
+    }
+
+    const fileName = document.getElementById('translatedFileName').textContent;
+    const url = window.URL.createObjectURL(translatedFileBlob);
+    const a = document.createElement('a');
+    a.style.display = 'none';
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    
+    console.log('File downloaded:', fileName);
+}
