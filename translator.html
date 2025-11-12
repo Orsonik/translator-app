@@ -231,10 +231,28 @@
                     
                     <div class="card">
                         <h4 class="text-white mb-3">Wgraj plik do tłumaczenia</h4>
-                        <input type="file" id="fileInput" />
-                        <button onclick="uploadFile()" class="btn-translator mt-3">
-                            <i class="fas fa-upload"></i> Wgraj Plik
-                        </button>
+                        <p class="text-white-50 mb-3">Wybierz plik z dysku lokalnego (.txt, .docx, .pdf, .xlsx)</p>
+                        
+                        <!-- Hidden file input -->
+                        <input type="file" id="fileInput" style="display: none;" accept=".txt,.doc,.docx,.pdf,.xlsx,.xls" />
+                        
+                        <!-- Selected file info -->
+                        <div id="selectedFileInfo" class="mb-3" style="display: none;">
+                            <div class="translation-box">
+                                <i class="fas fa-file text-white-50"></i>
+                                <span id="selectedFileName" class="text-white ms-2"></span>
+                                <span id="selectedFileSize" class="text-white-50 ms-2"></span>
+                            </div>
+                        </div>
+
+                        <div class="text-center">
+                            <button onclick="selectFile()" class="btn-translator">
+                                <i class="fas fa-folder-open"></i> Wybierz Plik
+                            </button>
+                            <button onclick="uploadFile()" id="uploadButton" class="btn-translator ms-2" style="display: none;">
+                                <i class="fas fa-upload"></i> Wgraj Plik
+                            </button>
+                        </div>
 
                         <div id="uploadLoading" class="loading">
                             <div class="spinner"></div>

@@ -54,13 +54,42 @@ async function translateText() {
     }
 }
 
+// Select file function - opens file dialog
+function selectFile() {
+    const fileInput = document.getElementById('fileInput');
+    fileInput.click();
+}
+
+// Handle file selection
+document.getElementById('fileInput')?.addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (file) {
+        // Show selected file info
+        document.getElementById('selectedFileName').textContent = file.name;
+        document.getElementById('selectedFileSize').textContent = `(${(file.size / 1024).toFixed(2)} KB)`;
+        document.getElementById('selectedFileInfo').style.display = 'block';
+        document.getElementById('uploadButton').style.display = 'inline-block';
+    } else {
+        // Hide if no file selected
+        document.getElementById('selectedFileInfo').style.display = 'none';
+        document.getElementById('uploadButton').style.display = 'none';
+    }
+});
+
 // Upload file function
 async function uploadFile() {
     const fileInput = document.getElementById('fileInput');
     const file = fileInput.files[0];
 
     if (!file) {
-        alert('Proszę wybrać plik');
+        alert('Proszę najpierw wybrać plik');
+        return;
+    }
+
+    // Validate file size (max 10MB)
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxSize) {
+        alert('Plik jest za duży. Maksymalny rozmiar to 10MB.');
         return;
     }
 
@@ -83,8 +112,12 @@ async function uploadFile() {
         const data = await response.json();
         alert(`Plik wgrany pomyślnie: ${data.fileName}`);
         
-        // Clear input and refresh files list
+        // Clear input and UI
         fileInput.value = '';
+        document.getElementById('selectedFileInfo').style.display = 'none';
+        document.getElementById('uploadButton').style.display = 'none';
+        
+        // Refresh files list
         loadFiles();
 
     } catch (error) {
