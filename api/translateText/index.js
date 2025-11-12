@@ -48,12 +48,6 @@ module.exports = async function (context, req) {
         const translatedText = translation.translations[0].text;
         const detectedLanguage = translation.detectedLanguage;
 
-        // Temporarily skip Cosmos DB to isolate the crypto error
-        // Save translation to Cosmos DB
-        // const cosmosClient = new CosmosClient({ endpoint: cosmosEndpoint, key: cosmosKey });
-        // const database = cosmosClient.database("TranslationsDB");
-        // const container = database.container("Translations");
-
         const translationRecord = {
             id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
             originalText: text,
@@ -64,8 +58,17 @@ module.exports = async function (context, req) {
             confidence: detectedLanguage?.score
         };
 
-        // await container.items.create(translationRecord);
-        context.log('Translation successful (Cosmos DB temporarily disabled)');
+        // Save translation to Cosmos DB
+        try {
+            const cosmosClient = new CosmosClient({ endpoint: cosmosEndpoint, key: cosmosKey });
+            const database = cosmosClient.database("TranslationsDB");
+            const container = database.container("Translations");
+            await container.items.create(translationRecord);
+            context.log('Translation saved to Cosmos DB');
+        } catch (dbError) {
+            context.log.error('Failed to save to Cosmos DB:', dbError.message);
+            // Continue anyway - translation was successful
+        }
 
         context.res = {
             status: 200,
