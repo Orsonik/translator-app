@@ -1,4 +1,4 @@
-const { BlobServiceClient } = require("@azure/storage-blob");
+const { ContainerClient } = require("@azure/storage-blob");
 
 const storageAccountName = "translatorstoragepl";
 const containerName = "source-files";
@@ -17,13 +17,11 @@ module.exports = async function (context, req) {
             return;
         }
 
-        // Use SAS token
-        const blobServiceClient = new BlobServiceClient(
-            `https://${storageAccountName}.blob.core.windows.net?${sasToken}`
-        );
-        const containerClient = blobServiceClient.getContainerClient(containerName);
+        // Use container-level SAS token - direct ContainerClient
+        const containerUrl = `https://${storageAccountName}.blob.core.windows.net/${containerName}?${sasToken}`;
+        const containerClient = new ContainerClient(containerUrl);
         
-        context.log('Listing blobs with SAS token...');
+        context.log('Listing blobs with container SAS token...');
         
         const files = [];
         for await (const blob of containerClient.listBlobsFlat()) {

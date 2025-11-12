@@ -1,4 +1,4 @@
-const { BlobServiceClient } = require("@azure/storage-blob");
+const { ContainerClient } = require("@azure/storage-blob");
 const parseMultipart = require("parse-multipart-data");
 
 const storageAccountName = "translatorstoragepl";
@@ -53,14 +53,12 @@ module.exports = async function (context, req) {
             size: fileData.length
         });
 
-        // Use SAS token (works even when shared key access is disabled)
-        const blobServiceClient = new BlobServiceClient(
-            `https://${storageAccountName}.blob.core.windows.net?${sasToken}`
-        );
-        const containerClient = blobServiceClient.getContainerClient(containerName);
+        // Use container-level SAS token - direct ContainerClient
+        const containerUrl = `https://${storageAccountName}.blob.core.windows.net/${containerName}?${sasToken}`;
+        const containerClient = new ContainerClient(containerUrl);
         const blockBlobClient = containerClient.getBlockBlobClient(fileName);
 
-        context.log('Uploading to blob storage with SAS token...');
+        context.log('Uploading to blob storage with container SAS token...');
         
         await blockBlobClient.upload(fileData, fileData.length, {
             blobHTTPHeaders: {
