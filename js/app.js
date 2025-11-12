@@ -100,16 +100,22 @@ async function uploadFile() {
         const formData = new FormData();
         formData.append('file', file);
 
+        console.log('Uploading file:', file.name, 'Size:', file.size);
+
         const response = await fetch(`${API_BASE}/uploadFile`, {
             method: 'POST',
             body: formData
         });
 
-        if (!response.ok) {
-            throw new Error('Błąd wgrywania pliku');
+        console.log('Upload response status:', response.status);
+        
+        const data = await response.json();
+        console.log('Upload response data:', data);
+
+        if (!response.ok || data.error) {
+            throw new Error(data.error || data.message || 'Błąd wgrywania pliku');
         }
 
-        const data = await response.json();
         alert(`Plik wgrany pomyślnie: ${data.fileName}`);
         
         // Clear input and UI
@@ -130,17 +136,22 @@ async function uploadFile() {
 
 // Load files list
 async function loadFiles() {
+    console.log('Loading files list...');
     try {
         const response = await fetch(`${API_BASE}/getFiles`);
+        
+        console.log('getFiles response status:', response.status);
         
         if (!response.ok) {
             throw new Error('Błąd ładowania plików');
         }
 
         const data = await response.json();
+        console.log('Files data received:', data);
         const filesList = document.getElementById('filesList');
 
         if (data.files && data.files.length > 0) {
+            console.log(`Displaying ${data.files.length} files`);
             filesList.innerHTML = data.files.map(file => `
                 <div class="file-item">
                     <div class="d-flex justify-content-between align-items-center">
@@ -158,13 +169,14 @@ async function loadFiles() {
                 </div>
             `).join('');
         } else {
+            console.log('No files found, showing empty message');
             filesList.innerHTML = '<p class="text-white-50 text-center">Brak wgranych plików</p>';
         }
 
     } catch (error) {
-        console.error('Error:', error);
+        console.error('Error loading files:', error);
         document.getElementById('filesList').innerHTML = 
-            '<p class="text-white-50 text-center">Nie można załadować listy plików. Sprawdź czy API jest uruchomione.</p>';
+            '<p class="text-danger text-center">Nie można załadować listy plików. Sprawdź konsolę (F12) aby zobaczyć szczegóły.</p>';
     }
 }
 

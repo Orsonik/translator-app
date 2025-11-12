@@ -53,12 +53,20 @@ module.exports = async function (context, req) {
         const fileName = file.filename || 'unnamed-file';
         const fileData = file.data;
 
+        context.log('File parsed:', {
+            fileName,
+            size: fileData.length,
+            type: file.type
+        });
+
         // Upload to Blob Storage
         const blobServiceClient = BlobServiceClient.fromConnectionString(storageConnectionString);
         const containerClient = blobServiceClient.getContainerClient("source-files");
         const blockBlobClient = containerClient.getBlockBlobClient(fileName);
 
+        context.log('Uploading to blob storage:', fileName);
         await blockBlobClient.upload(fileData, fileData.length);
+        context.log('Blob upload successful');
 
         // Save metadata to Cosmos DB
         const cosmosClient = new CosmosClient({ endpoint: cosmosEndpoint, key: cosmosKey });
@@ -74,7 +82,9 @@ module.exports = async function (context, req) {
             blobUrl: blockBlobClient.url
         };
 
+        context.log('Saving to Cosmos DB:', fileRecord);
         await container.items.create(fileRecord);
+        context.log('Cosmos DB save successful');
 
         context.res = {
             status: 200,
