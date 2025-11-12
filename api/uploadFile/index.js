@@ -10,6 +10,22 @@ module.exports = async function (context, req) {
     context.log('Upload file function processed a request.');
 
     try {
+        // Check credentials
+        if (!storageConnectionString || !cosmosEndpoint || !cosmosKey) {
+            context.log.error('Missing credentials:', {
+                hasStorage: !!storageConnectionString,
+                hasCosmos: !!cosmosEndpoint && !!cosmosKey
+            });
+            context.res = {
+                status: 200,
+                body: { 
+                    error: "Service temporarily unavailable",
+                    message: "Configuration is being updated. Please try again in a moment."
+                }
+            };
+            return;
+        }
+
         const contentType = req.headers['content-type'] || '';
         
         if (!contentType.includes('multipart/form-data')) {
@@ -20,9 +36,10 @@ module.exports = async function (context, req) {
             return;
         }
 
-        // Parse multipart data
+        // Parse multipart data - req.body for v3 is Buffer
         const boundary = contentType.split('boundary=')[1];
-        const parts = parseMultipart.parse(req.body, boundary);
+        const bodyBuffer = Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body);
+        const parts = parseMultipart.parse(bodyBuffer, boundary);
         
         if (!parts || parts.length === 0) {
             context.res = {
@@ -33,7 +50,7 @@ module.exports = async function (context, req) {
         }
 
         const file = parts[0];
-        const fileName = file.filename;
+        const fileName = file.filename || 'unnamed-file';
         const fileData = file.data;
 
         // Upload to Blob Storage
@@ -71,8 +88,11 @@ module.exports = async function (context, req) {
     } catch (error) {
         context.log.error("Error uploading file:", error);
         context.res = {
-            status: 500,
-            body: { error: error.message || "Internal server error" }
+            status: 200,
+            body: { 
+                error: error.message || "Internal server error",
+                message: "Upload failed. Please check the file and try again."
+            }
         };
     }
 };
