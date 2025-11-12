@@ -1,8 +1,8 @@
 const parseMultipart = require("parse-multipart-data");
 const axios = require("axios");
 
-const sasToken = process.env.AZURE_STORAGE_SAS_TOKEN || "";
 const storageAccountName = "translatorstoragepl";
+const storageAccountKey = process.env.AZURE_STORAGE_ACCOUNT_KEY || "";
 const containerName = "source-files";
 
 module.exports = async function (context, req) {
@@ -10,8 +10,8 @@ module.exports = async function (context, req) {
 
     try {
         // Check credentials
-        if (!sasToken) {
-            context.log.error('Missing SAS token');
+        if (!storageAccountKey) {
+            context.log.error('Missing storage account key');
             context.res = {
                 status: 200,
                 body: { 
@@ -54,19 +54,44 @@ module.exports = async function (context, req) {
             size: fileData.length
         });
 
-        // Upload using REST API with SAS token (no crypto/SDK needed)
-        const blobUrl = `https://${storageAccountName}.blob.core.windows.net/${containerName}/${encodeURIComponent(fileName)}?${sasToken}`;
+        // Upload using REST API with Shared Key (no crypto module needed for this)
+        const blobUrl = `https://${storageAccountName}.blob.core.windows.net/${containerName}/${encodeURIComponent(fileName)}`;
         
         context.log('Uploading to blob storage...');
         context.log('File name:', fileName);
         context.log('File size:', fileData.length);
-        context.log('SAS token present:', !!sasToken);
+        
+        // Create authorization header using simple string manipulation
+        const date = new Date().toUTCString();
+        const contentLength = fileData.length;
+        const blobType = 'BlockBlob';
+        const contentTypeHeader = file.type || 'application/octet-stream';
+        
+        // Build canonical headers
+        const canonicalHeaders = `x-ms-blob-type:${blobType}\nx-ms-date:${date}\nx-ms-version:2021-08-06`;
+        
+        // Build canonical resource
+        const canonicalResource = `/${storageAccountName}/${containerName}/${fileName}`;
+        
+        // Build string to sign
+        const stringToSign = `PUT\n\n\n${contentLength}\n\n${contentTypeHeader}\n\n\n\n\n\n\n${canonicalHeaders}\n${canonicalResource}`;
+        
+        // Create signature using crypto (built-in Node.js module - should work in Azure Functions)
+        const crypto = require('crypto');
+        const signature = crypto.createHmac('sha256', Buffer.from(storageAccountKey, 'base64'))
+            .update(stringToSign, 'utf8')
+            .digest('base64');
+        
+        const authHeader = `SharedKey ${storageAccountName}:${signature}`;
         
         const response = await axios.put(blobUrl, fileData, {
             headers: {
-                'x-ms-blob-type': 'BlockBlob',
-                'Content-Type': file.type || 'application/octet-stream',
-                'Content-Length': fileData.length
+                'Authorization': authHeader,
+                'x-ms-blob-type': blobType,
+                'x-ms-date': date,
+                'x-ms-version': '2021-08-06',
+                'Content-Type': contentTypeHeader,
+                'Content-Length': contentLength
             }
         });
 
