@@ -7,16 +7,9 @@ module.exports = async function (context, req) {
     context.log('Get files function processed a request.');
 
     try {
-        const cosmosClient = new CosmosClient({ endpoint: cosmosEndpoint, key: cosmosKey });
-        const database = cosmosClient.database("TranslationsDB");
-        const container = database.container("Files");
-
-        const { resources: files } = await container.items
-            .query({
-                query: "SELECT * FROM c ORDER BY c.uploadDate DESC"
-            })
-            .fetchAll();
-
+        // Temporarily return mock data (Cosmos DB disabled due to crypto error)
+        const files = [];
+        
         context.res = {
             status: 200,
             body: { files }

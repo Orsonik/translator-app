@@ -10,6 +10,14 @@ const cosmosKey = process.env.COSMOS_KEY || "";
 module.exports = async function (context, req) {
     context.log('Translate text function processed a request.');
 
+    // Debug: log environment variables (without exposing full keys)
+    context.log('Environment check:', {
+        hasTranslatorKey: !!translatorKey,
+        hasTranslatorEndpoint: !!translatorEndpoint,
+        hasCosmosEndpoint: !!cosmosEndpoint,
+        hasCosmosKey: !!cosmosKey
+    });
+
     try {
         const { text, targetLanguage, sourceLanguage } = req.body;
 
@@ -40,10 +48,11 @@ module.exports = async function (context, req) {
         const translatedText = translation.translations[0].text;
         const detectedLanguage = translation.detectedLanguage;
 
+        // Temporarily skip Cosmos DB to isolate the crypto error
         // Save translation to Cosmos DB
-        const cosmosClient = new CosmosClient({ endpoint: cosmosEndpoint, key: cosmosKey });
-        const database = cosmosClient.database("TranslationsDB");
-        const container = database.container("Translations");
+        // const cosmosClient = new CosmosClient({ endpoint: cosmosEndpoint, key: cosmosKey });
+        // const database = cosmosClient.database("TranslationsDB");
+        // const container = database.container("Translations");
 
         const translationRecord = {
             id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -55,7 +64,8 @@ module.exports = async function (context, req) {
             confidence: detectedLanguage?.score
         };
 
-        await container.items.create(translationRecord);
+        // await container.items.create(translationRecord);
+        context.log('Translation successful (Cosmos DB temporarily disabled)');
 
         context.res = {
             status: 200,
