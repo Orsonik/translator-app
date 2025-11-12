@@ -1,21 +1,17 @@
-const { BlobServiceClient } = require("@azure/storage-blob");
-const { CosmosClient } = require("@azure/cosmos");
 const parseMultipart = require("parse-multipart-data");
+const axios = require("axios");
 
-const storageConnectionString = process.env.AZURE_STORAGE_CONNECTION_STRING || "";
-const cosmosEndpoint = process.env.COSMOS_ENDPOINT || "";
-const cosmosKey = process.env.COSMOS_KEY || "";
+const sasToken = process.env.AZURE_STORAGE_SAS_TOKEN || "";
+const storageAccountName = "translatorstoragepl";
+const containerName = "source-files";
 
 module.exports = async function (context, req) {
     context.log('Upload file function processed a request.');
 
     try {
         // Check credentials
-        if (!storageConnectionString || !cosmosEndpoint || !cosmosKey) {
-            context.log.error('Missing credentials:', {
-                hasStorage: !!storageConnectionString,
-                hasCosmos: !!cosmosEndpoint && !!cosmosKey
-            });
+        if (!sasToken) {
+            context.log.error('Missing SAS token');
             context.res = {
                 status: 200,
                 body: { 
@@ -36,7 +32,7 @@ module.exports = async function (context, req) {
             return;
         }
 
-        // Parse multipart data - req.body for v3 is Buffer
+        // Parse multipart data
         const boundary = contentType.split('boundary=')[1];
         const bodyBuffer = Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body);
         const parts = parseMultipart.parse(bodyBuffer, boundary);
@@ -55,43 +51,31 @@ module.exports = async function (context, req) {
 
         context.log('File parsed:', {
             fileName,
-            size: fileData.length,
-            type: file.type
+            size: fileData.length
         });
 
-        // Upload to Blob Storage
-        const blobServiceClient = BlobServiceClient.fromConnectionString(storageConnectionString);
-        const containerClient = blobServiceClient.getContainerClient("source-files");
-        const blockBlobClient = containerClient.getBlockBlobClient(fileName);
+        // Upload using REST API with SAS token (no crypto/SDK needed)
+        const blobUrl = `https://${storageAccountName}.blob.core.windows.net/${containerName}/${encodeURIComponent(fileName)}?${sasToken}`;
+        
+        context.log('Uploading to:', blobUrl.substring(0, 100) + '...');
+        
+        const response = await axios.put(blobUrl, fileData, {
+            headers: {
+                'x-ms-blob-type': 'BlockBlob',
+                'Content-Type': file.type || 'application/octet-stream',
+                'Content-Length': fileData.length
+            }
+        });
 
-        context.log('Uploading to blob storage:', fileName);
-        await blockBlobClient.upload(fileData, fileData.length);
-        context.log('Blob upload successful');
-
-        // Save metadata to Cosmos DB
-        const cosmosClient = new CosmosClient({ endpoint: cosmosEndpoint, key: cosmosKey });
-        const database = cosmosClient.database("TranslationsDB");
-        const container = database.container("Files");
-
-        const fileRecord = {
-            id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            fileName: fileName,
-            uploadDate: new Date().toISOString(),
-            size: fileData.length,
-            status: "uploaded",
-            blobUrl: blockBlobClient.url
-        };
-
-        context.log('Saving to Cosmos DB:', fileRecord);
-        await container.items.create(fileRecord);
-        context.log('Cosmos DB save successful');
+        context.log('Upload successful, status:', response.status);
 
         context.res = {
             status: 200,
             body: {
                 message: "File uploaded successfully",
                 fileName: fileName,
-                fileId: fileRecord.id
+                size: fileData.length,
+                uploadDate: new Date().toISOString()
             }
         };
 
