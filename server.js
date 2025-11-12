@@ -299,8 +299,9 @@ app.post('/api/translateFile', upload.single('file'), async (req, res) => {
 
         console.log('Translation completed, text length:', translatedText.length);
 
-        // Create translated file
-        const translatedFileName = `translated_${targetLanguage}_${fileName}`;
+        // Create translated file - always return as .txt since we extracted text
+        const baseFileName = fileName.substring(0, fileName.lastIndexOf('.')) || fileName;
+        const translatedFileName = `translated_${targetLanguage}_${baseFileName}.txt`;
         const translatedBuffer = Buffer.from(translatedText, 'utf-8');
 
         // Optional: Upload translated file to Blob Storage
