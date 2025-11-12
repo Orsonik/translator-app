@@ -5,6 +5,8 @@ const { DefaultAzureCredential } = require('@azure/identity');
 const { BlobServiceClient } = require('@azure/storage-blob');
 const { CosmosClient } = require('@azure/cosmos');
 const axios = require('axios');
+const mammoth = require('mammoth');
+const pdfParse = require('pdf-parse');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -204,38 +206,97 @@ app.post('/api/translateFile', upload.single('file'), async (req, res) => {
         if (fileExtension === 'txt') {
             // Plain text file
             textToTranslate = fileData.toString('utf-8');
+        } else if (fileExtension === 'docx' || fileExtension === 'doc') {
+            // Word document
+            console.log('Extracting text from DOCX...');
+            const result = await mammoth.extractRawText({ buffer: fileData });
+            textToTranslate = result.value;
+            if (result.messages && result.messages.length > 0) {
+                console.log('Mammoth warnings:', result.messages);
+            }
+        } else if (fileExtension === 'pdf') {
+            // PDF document
+            console.log('Extracting text from PDF...');
+            const pdfData = await pdfParse(fileData);
+            textToTranslate = pdfData.text;
         } else {
-            // For now, only support .txt files
-            // In future, add support for .docx, .pdf using libraries like mammoth, pdf-parse
             return res.status(400).json({ 
                 error: 'Unsupported file format',
-                message: 'Currently only .txt files are supported. Support for .docx and .pdf coming soon.'
+                message: 'Supported formats: .txt, .doc, .docx, .pdf'
             });
         }
 
         console.log('Extracted text length:', textToTranslate.length);
 
-        // Translate text using Azure Translator
-        const response = await axios({
-            baseURL: translatorEndpoint,
-            url: '/translate',
-            method: 'post',
-            headers: {
-                'Ocp-Apim-Subscription-Key': translatorKey,
-                'Ocp-Apim-Subscription-Region': translatorRegion,
-                'Content-type': 'application/json'
-            },
-            params: {
-                'api-version': '3.0',
-                'to': targetLanguage
-            },
-            data: [{
-                'text': textToTranslate
-            }],
-            responseType: 'json'
-        });
+        if (!textToTranslate || textToTranslate.trim().length === 0) {
+            return res.status(400).json({
+                error: 'No text extracted',
+                message: 'The file appears to be empty or contains no extractable text.'
+            });
+        }
 
-        const translatedText = response.data[0].translations[0].text;
+        // Azure Translator has a limit of ~50,000 characters per request
+        // For large texts, we need to split and translate in chunks
+        const maxChunkSize = 5000;
+        let translatedText = '';
+        
+        if (textToTranslate.length <= maxChunkSize) {
+            // Small text - translate in one request
+            const response = await axios({
+                baseURL: translatorEndpoint,
+                url: '/translate',
+                method: 'post',
+                headers: {
+                    'Ocp-Apim-Subscription-Key': translatorKey,
+                    'Ocp-Apim-Subscription-Region': translatorRegion,
+                    'Content-type': 'application/json'
+                },
+                params: {
+                    'api-version': '3.0',
+                    'to': targetLanguage
+                },
+                data: [{
+                    'text': textToTranslate
+                }],
+                responseType: 'json'
+            });
+
+            translatedText = response.data[0].translations[0].text;
+        } else {
+            // Large text - split into chunks and translate
+            console.log('Large text detected, splitting into chunks...');
+            const chunks = [];
+            for (let i = 0; i < textToTranslate.length; i += maxChunkSize) {
+                chunks.push(textToTranslate.substring(i, i + maxChunkSize));
+            }
+            
+            console.log(`Translating ${chunks.length} chunks...`);
+            
+            for (let i = 0; i < chunks.length; i++) {
+                const response = await axios({
+                    baseURL: translatorEndpoint,
+                    url: '/translate',
+                    method: 'post',
+                    headers: {
+                        'Ocp-Apim-Subscription-Key': translatorKey,
+                        'Ocp-Apim-Subscription-Region': translatorRegion,
+                        'Content-type': 'application/json'
+                    },
+                    params: {
+                        'api-version': '3.0',
+                        'to': targetLanguage
+                    },
+                    data: [{
+                        'text': chunks[i]
+                    }],
+                    responseType: 'json'
+                });
+                
+                translatedText += response.data[0].translations[0].text;
+                console.log(`Chunk ${i + 1}/${chunks.length} translated`);
+            }
+        }
+
         console.log('Translation completed, text length:', translatedText.length);
 
         // Create translated file
