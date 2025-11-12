@@ -1,6 +1,5 @@
-import { app, HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
-import { CosmosClient } from "@azure/cosmos";
-import axios from "axios";
+const { CosmosClient } = require("@azure/cosmos");
+const axios = require("axios");
 
 const translatorKey = process.env.TRANSLATOR_KEY || "";
 const translatorEndpoint = process.env.TRANSLATOR_ENDPOINT || "";
@@ -8,18 +7,18 @@ const translatorRegion = process.env.TRANSLATOR_REGION || "westeurope";
 const cosmosEndpoint = process.env.COSMOS_ENDPOINT || "";
 const cosmosKey = process.env.COSMOS_KEY || "";
 
-export async function translateText(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
-    context.log(`Http function processed request for url "${request.url}"`);
+module.exports = async function (context, req) {
+    context.log('Translate text function processed a request.');
 
     try {
-        const body: any = await request.json();
-        const { text, targetLanguage, sourceLanguage } = body;
+        const { text, targetLanguage, sourceLanguage } = req.body;
 
         if (!text || !targetLanguage) {
-            return {
+            context.res = {
                 status: 400,
-                jsonBody: { error: "Text and target language are required" }
+                body: { error: "Text and target language are required" }
             };
+            return;
         }
 
         // Call Azure Translator API
@@ -58,26 +57,20 @@ export async function translateText(request: HttpRequest, context: InvocationCon
 
         await container.items.create(translationRecord);
 
-        return {
+        context.res = {
             status: 200,
-            jsonBody: {
+            body: {
                 translatedText: translatedText,
                 detectedLanguage: detectedLanguage,
                 translationId: translationRecord.id
             }
         };
 
-    } catch (error: any) {
-        context.error("Error translating text:", error);
-        return {
+    } catch (error) {
+        context.log.error("Error translating text:", error);
+        context.res = {
             status: 500,
-            jsonBody: { error: error.message || "Internal server error" }
+            body: { error: error.message || "Internal server error" }
         };
     }
-}
-
-app.http('translateText', {
-    methods: ['POST'],
-    authLevel: 'anonymous',
-    handler: translateText
-});
+};

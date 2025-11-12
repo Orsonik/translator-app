@@ -25,14 +25,10 @@ jobs:
         with:
           node-version: '18'
       
-      - name: Install API dependencies and build
+      - name: Install API dependencies
         run: |
           cd api
           npm install
-          npm run build
-          # Copy compiled files to root of api folder for Azure SWA
-          cp -r dist/* .
-          ls -la
       
       - name: Build And Deploy
         id: builddeploy
