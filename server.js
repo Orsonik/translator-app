@@ -200,6 +200,20 @@ app.post('/api/translateFile', upload.single('file'), async (req, res) => {
             extension: fileExtension
         });
 
+        // Upload original file to source-files container
+        try {
+            const sourceContainerClient = blobServiceClient.getContainerClient(containerName);
+            const timestamp = Date.now();
+            const uniqueFileName = `${timestamp}_${fileName}`;
+            const blockBlobClient = sourceContainerClient.getBlockBlobClient(uniqueFileName);
+            
+            await blockBlobClient.upload(fileData, fileData.length);
+            console.log('Original file uploaded to source-files:', uniqueFileName);
+        } catch (uploadError) {
+            console.error('Failed to upload original file to storage:', uploadError.message);
+            // Continue anyway - translation can still work
+        }
+
         // Extract text from file based on type
         let textToTranslate = '';
         
@@ -301,13 +315,14 @@ app.post('/api/translateFile', upload.single('file'), async (req, res) => {
 
         // Create translated file - always return as .txt since we extracted text
         const baseFileName = fileName.substring(0, fileName.lastIndexOf('.')) || fileName;
-        const translatedFileName = `translated_${targetLanguage}_${baseFileName}.txt`;
+        const timestamp = Date.now();
+        const uniqueTranslatedFileName = `${timestamp}_translated_${targetLanguage}_${baseFileName}.txt`;
         const translatedBuffer = Buffer.from(translatedText, 'utf-8');
 
-        // Optional: Upload translated file to Blob Storage
+        // Upload translated file to Blob Storage
         try {
             const translatedContainerClient = blobServiceClient.getContainerClient('translated-files');
-            const blockBlobClient = translatedContainerClient.getBlockBlobClient(translatedFileName);
+            const blockBlobClient = translatedContainerClient.getBlockBlobClient(uniqueTranslatedFileName);
             
             await blockBlobClient.upload(translatedBuffer, translatedBuffer.length, {
                 blobHTTPHeaders: {
@@ -315,15 +330,37 @@ app.post('/api/translateFile', upload.single('file'), async (req, res) => {
                 }
             });
             
-            console.log('Translated file uploaded to storage:', translatedFileName);
+            console.log('Translated file uploaded to storage:', uniqueTranslatedFileName);
         } catch (storageError) {
-            console.error('Failed to upload translated file to storage (non-critical):', storageError.message);
+            console.error('Failed to upload translated file to storage:', storageError.message);
+        }
+
+        // Save file translation record to Cosmos DB
+        try {
+            const translationRecord = {
+                id: `file_${timestamp}`,
+                type: 'file',
+                originalFileName: fileName,
+                translatedFileName: uniqueTranslatedFileName,
+                sourceLanguage: 'auto',
+                targetLanguage: targetLanguage,
+                originalSize: fileData.length,
+                translatedSize: translatedBuffer.length,
+                textLength: textToTranslate.length,
+                fileType: fileExtension,
+                timestamp: new Date().toISOString()
+            };
+
+            await container.items.create(translationRecord);
+            console.log('File translation record saved to Cosmos DB');
+        } catch (dbError) {
+            console.error('Failed to save translation record to Cosmos DB:', dbError.message);
         }
 
         // Return translated file
         res.set({
             'Content-Type': 'text/plain; charset=utf-8',
-            'Content-Disposition': `attachment; filename="${translatedFileName}"`,
+            'Content-Disposition': `attachment; filename="${uniqueTranslatedFileName}"`,
             'Content-Length': translatedBuffer.length
         });
         res.send(translatedBuffer);
@@ -344,22 +381,42 @@ app.get('/api/getFiles', async (req, res) => {
     console.log('Get files request received');
     
     try {
-        const containerClient = blobServiceClient.getContainerClient(containerName);
-        
-        console.log('Listing blobs with Managed Identity...');
-        
         const files = [];
-        for await (const blob of containerClient.listBlobsFlat()) {
+        
+        // Get files from source-files container
+        const sourceContainerClient = blobServiceClient.getContainerClient(containerName);
+        console.log('Listing source files with Managed Identity...');
+        
+        for await (const blob of sourceContainerClient.listBlobsFlat()) {
             files.push({
                 fileName: blob.name,
                 size: blob.properties.contentLength,
                 uploadDate: blob.properties.lastModified,
                 status: 'uploaded',
+                container: 'source-files',
                 blobUrl: `https://${storageAccountName}.blob.core.windows.net/${containerName}/${blob.name}`
             });
         }
 
-        console.log(`Found ${files.length} files`);
+        // Get files from translated-files container
+        const translatedContainerClient = blobServiceClient.getContainerClient('translated-files');
+        console.log('Listing translated files with Managed Identity...');
+        
+        for await (const blob of translatedContainerClient.listBlobsFlat()) {
+            files.push({
+                fileName: blob.name,
+                size: blob.properties.contentLength,
+                uploadDate: blob.properties.lastModified,
+                status: 'translated',
+                container: 'translated-files',
+                blobUrl: `https://${storageAccountName}.blob.core.windows.net/translated-files/${blob.name}`
+            });
+        }
+
+        // Sort by upload date (newest first)
+        files.sort((a, b) => new Date(b.uploadDate) - new Date(a.uploadDate));
+
+        console.log(`Found ${files.length} files total`);
 
         res.json({ files });
 

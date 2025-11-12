@@ -154,22 +154,31 @@ async function loadFiles() {
 
         if (data.files && data.files.length > 0) {
             console.log(`Displaying ${data.files.length} files`);
-            filesList.innerHTML = data.files.map(file => `
-                <div class="file-item">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <h5 class="text-white mb-1">
-                                <i class="fas fa-file"></i> ${file.fileName}
-                            </h5>
-                            <p class="text-white-50 mb-0">
-                                <small>Wgrano: ${new Date(file.uploadDate).toLocaleString('pl-PL')}</small>
-                                <small class="ms-3">Rozmiar: ${(file.size / 1024).toFixed(2)} KB</small>
-                            </p>
+            filesList.innerHTML = data.files.map(file => {
+                const statusBadge = file.status === 'translated' 
+                    ? '<span class="badge bg-info">Przetłumaczony</span>'
+                    : '<span class="badge bg-success">Oryginalny</span>';
+                const containerBadge = file.container === 'translated-files'
+                    ? '<i class="fas fa-language ms-2"></i>'
+                    : '<i class="fas fa-file-upload ms-2"></i>';
+                
+                return `
+                    <div class="file-item">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h5 class="text-white mb-1">
+                                    <i class="fas fa-file"></i> ${file.fileName} ${containerBadge}
+                                </h5>
+                                <p class="text-white-50 mb-0">
+                                    <small>Wgrano: ${new Date(file.uploadDate).toLocaleString('pl-PL')}</small>
+                                    <small class="ms-3">Rozmiar: ${(file.size / 1024).toFixed(2)} KB</small>
+                                </p>
+                            </div>
+                            ${statusBadge}
                         </div>
-                        <span class="badge bg-success">${file.status}</span>
                     </div>
-                </div>
-            `).join('');
+                `;
+            }).join('');
         } else {
             console.log('No files found, showing empty message');
             filesList.innerHTML = '<p class="text-white-50 text-center">Brak wgranych plików</p>';
@@ -195,27 +204,58 @@ async function loadHistory() {
         const historyList = document.getElementById('historyList');
 
         if (data.translations && data.translations.length > 0) {
-            historyList.innerHTML = data.translations.map(trans => `
-                <div class="history-item">
-                    <div class="row">
-                        <div class="col-md-5">
-                            <label class="text-white-50 small">Oryginalny tekst (${trans.sourceLanguage || 'auto'})</label>
-                            <p class="text-white">${trans.originalText}</p>
+            historyList.innerHTML = data.translations.map(trans => {
+                // Check if it's a file translation or text translation
+                if (trans.type === 'file') {
+                    return `
+                        <div class="history-item">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="flex-grow-1">
+                                    <h5 class="text-white mb-2">
+                                        <i class="fas fa-file-alt text-info"></i> Tłumaczenie pliku
+                                    </h5>
+                                    <p class="text-white-50 mb-1">
+                                        <strong>Oryginalny plik:</strong> ${trans.originalFileName}
+                                    </p>
+                                    <p class="text-white-50 mb-1">
+                                        <strong>Przetłumaczony plik:</strong> ${trans.translatedFileName}
+                                    </p>
+                                    <p class="text-white-50 mb-1">
+                                        <small>Język: ${trans.targetLanguage} | Rozmiar: ${(trans.originalSize / 1024).toFixed(2)} KB → ${(trans.translatedSize / 1024).toFixed(2)} KB</small>
+                                    </p>
+                                </div>
+                                <span class="badge bg-info">Plik</span>
+                            </div>
+                            <div class="text-white-50 small mt-2">
+                                <i class="far fa-clock"></i> ${new Date(trans.timestamp).toLocaleString('pl-PL')}
+                            </div>
                         </div>
-                        <div class="col-md-2 text-center">
-                            <i class="fas fa-arrow-right text-white-50" style="font-size: 24px; margin-top: 30px;"></i>
+                    `;
+                } else {
+                    // Text translation
+                    return `
+                        <div class="history-item">
+                            <div class="row">
+                                <div class="col-md-5">
+                                    <label class="text-white-50 small">Oryginalny tekst (${trans.sourceLanguage || 'auto'})</label>
+                                    <p class="text-white">${trans.originalText}</p>
+                                </div>
+                                <div class="col-md-2 text-center">
+                                    <i class="fas fa-arrow-right text-white-50" style="font-size: 24px; margin-top: 30px;"></i>
+                                </div>
+                                <div class="col-md-5">
+                                    <label class="text-white-50 small">Tłumaczenie (${trans.targetLanguage})</label>
+                                    <p class="text-white">${trans.translatedText}</p>
+                                </div>
+                            </div>
+                            <div class="text-white-50 small mt-2">
+                                <i class="far fa-clock"></i> ${new Date(trans.timestamp).toLocaleString('pl-PL')}
+                                ${trans.confidence ? `<span class="ms-3"><i class="fas fa-check-circle"></i> Pewność: ${(trans.confidence * 100).toFixed(1)}%</span>` : ''}
+                            </div>
                         </div>
-                        <div class="col-md-5">
-                            <label class="text-white-50 small">Tłumaczenie (${trans.targetLanguage})</label>
-                            <p class="text-white">${trans.translatedText}</p>
-                        </div>
-                    </div>
-                    <div class="text-white-50 small mt-2">
-                        <i class="far fa-clock"></i> ${new Date(trans.timestamp).toLocaleString('pl-PL')}
-                        ${trans.confidence ? `<span class="ms-3"><i class="fas fa-check-circle"></i> Pewność: ${(trans.confidence * 100).toFixed(1)}%</span>` : ''}
-                    </div>
-                </div>
-            `).join('');
+                    `;
+                }
+            }).join('');
         } else {
             historyList.innerHTML = '<p class="text-white-50 text-center">Brak historii tłumaczeń</p>';
         }
