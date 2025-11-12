@@ -1,27 +1,15 @@
+const { BlobServiceClient } = require("@azure/storage-blob");
+const { DefaultAzureCredential } = require("@azure/identity");
 const parseMultipart = require("parse-multipart-data");
-const axios = require("axios");
 
 const storageAccountName = "translatorstoragepl";
-const storageAccountKey = process.env.AZURE_STORAGE_ACCOUNT_KEY || "";
 const containerName = "source-files";
+const storageAccountUrl = `https://${storageAccountName}.blob.core.windows.net`;
 
 module.exports = async function (context, req) {
     context.log('Upload file function processed a request.');
 
     try {
-        // Check credentials
-        if (!storageAccountKey) {
-            context.log.error('Missing storage account key');
-            context.res = {
-                status: 200,
-                body: { 
-                    error: "Service temporarily unavailable",
-                    message: "Configuration is being updated. Please try again in a moment."
-                }
-            };
-            return;
-        }
-
         const contentType = req.headers['content-type'] || '';
         
         if (!contentType.includes('multipart/form-data')) {
@@ -54,48 +42,21 @@ module.exports = async function (context, req) {
             size: fileData.length
         });
 
-        // Upload using REST API with Shared Key (no crypto module needed for this)
-        const blobUrl = `https://${storageAccountName}.blob.core.windows.net/${containerName}/${encodeURIComponent(fileName)}`;
+        // Use Managed Identity for authentication
+        const credential = new DefaultAzureCredential();
+        const blobServiceClient = new BlobServiceClient(storageAccountUrl, credential);
+        const containerClient = blobServiceClient.getContainerClient(containerName);
+        const blockBlobClient = containerClient.getBlockBlobClient(fileName);
+
+        context.log('Uploading to blob storage with Managed Identity...');
         
-        context.log('Uploading to blob storage...');
-        context.log('File name:', fileName);
-        context.log('File size:', fileData.length);
-        
-        // Create authorization header using simple string manipulation
-        const date = new Date().toUTCString();
-        const contentLength = fileData.length;
-        const blobType = 'BlockBlob';
-        const contentTypeHeader = file.type || 'application/octet-stream';
-        
-        // Build canonical headers
-        const canonicalHeaders = `x-ms-blob-type:${blobType}\nx-ms-date:${date}\nx-ms-version:2021-08-06`;
-        
-        // Build canonical resource
-        const canonicalResource = `/${storageAccountName}/${containerName}/${fileName}`;
-        
-        // Build string to sign
-        const stringToSign = `PUT\n\n\n${contentLength}\n\n${contentTypeHeader}\n\n\n\n\n\n\n${canonicalHeaders}\n${canonicalResource}`;
-        
-        // Create signature using crypto (built-in Node.js module - should work in Azure Functions)
-        const crypto = require('crypto');
-        const signature = crypto.createHmac('sha256', Buffer.from(storageAccountKey, 'base64'))
-            .update(stringToSign, 'utf8')
-            .digest('base64');
-        
-        const authHeader = `SharedKey ${storageAccountName}:${signature}`;
-        
-        const response = await axios.put(blobUrl, fileData, {
-            headers: {
-                'Authorization': authHeader,
-                'x-ms-blob-type': blobType,
-                'x-ms-date': date,
-                'x-ms-version': '2021-08-06',
-                'Content-Type': contentTypeHeader,
-                'Content-Length': contentLength
+        await blockBlobClient.upload(fileData, fileData.length, {
+            blobHTTPHeaders: {
+                blobContentType: file.type || 'application/octet-stream'
             }
         });
 
-        context.log('Upload successful, status:', response.status);
+        context.log('Upload successful:', fileName);
 
         context.res = {
             status: 200,
@@ -103,7 +64,8 @@ module.exports = async function (context, req) {
                 message: "File uploaded successfully",
                 fileName: fileName,
                 size: fileData.length,
-                uploadDate: new Date().toISOString()
+                uploadDate: new Date().toISOString(),
+                blobUrl: blockBlobClient.url
             }
         };
 
