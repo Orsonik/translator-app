@@ -11,10 +11,9 @@ module.exports = async function (context, req) {
         const database = cosmosClient.database("TranslationsDB");
         const container = database.container("Translations");
 
+        // Use TOP instead of OFFSET/LIMIT for Cosmos DB v3 compatibility
         const { resources: translations } = await container.items
-            .query({
-                query: "SELECT * FROM c ORDER BY c.timestamp DESC OFFSET 0 LIMIT 100"
-            })
+            .query("SELECT TOP 100 * FROM c ORDER BY c.timestamp DESC")
             .fetchAll();
 
         context.res = {

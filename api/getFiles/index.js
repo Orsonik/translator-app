@@ -12,9 +12,7 @@ module.exports = async function (context, req) {
         const container = database.container("Files");
 
         const { resources: files } = await container.items
-            .query({
-                query: "SELECT * FROM c ORDER BY c.uploadDate DESC"
-            })
+            .query("SELECT * FROM c ORDER BY c.uploadDate DESC")
             .fetchAll();
 
         context.res = {
