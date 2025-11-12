@@ -1,15 +1,26 @@
 const { BlobServiceClient } = require("@azure/storage-blob");
-const { DefaultAzureCredential } = require("@azure/identity");
 const parseMultipart = require("parse-multipart-data");
 
 const storageAccountName = "translatorstoragepl";
 const containerName = "source-files";
-const storageAccountUrl = `https://${storageAccountName}.blob.core.windows.net`;
+const sasToken = process.env.BLOB_SAS_TOKEN || "";
 
 module.exports = async function (context, req) {
     context.log('Upload file function processed a request.');
 
     try {
+        if (!sasToken) {
+            context.log.error('Missing SAS token');
+            context.res = {
+                status: 200,
+                body: { 
+                    error: "Storage not configured",
+                    message: "Please configure BLOB_SAS_TOKEN"
+                }
+            };
+            return;
+        }
+
         const contentType = req.headers['content-type'] || '';
         
         if (!contentType.includes('multipart/form-data')) {
@@ -42,13 +53,14 @@ module.exports = async function (context, req) {
             size: fileData.length
         });
 
-        // Use Managed Identity for authentication
-        const credential = new DefaultAzureCredential();
-        const blobServiceClient = new BlobServiceClient(storageAccountUrl, credential);
+        // Use SAS token (works even when shared key access is disabled)
+        const blobServiceClient = new BlobServiceClient(
+            `https://${storageAccountName}.blob.core.windows.net?${sasToken}`
+        );
         const containerClient = blobServiceClient.getContainerClient(containerName);
         const blockBlobClient = containerClient.getBlockBlobClient(fileName);
 
-        context.log('Uploading to blob storage with Managed Identity...');
+        context.log('Uploading to blob storage with SAS token...');
         
         await blockBlobClient.upload(fileData, fileData.length, {
             blobHTTPHeaders: {

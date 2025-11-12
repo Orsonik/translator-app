@@ -1,20 +1,29 @@
 const { BlobServiceClient } = require("@azure/storage-blob");
-const { DefaultAzureCredential } = require("@azure/identity");
 
 const storageAccountName = "translatorstoragepl";
 const containerName = "source-files";
-const storageAccountUrl = `https://${storageAccountName}.blob.core.windows.net`;
+const sasToken = process.env.BLOB_SAS_TOKEN || "";
 
 module.exports = async function (context, req) {
     context.log('Get files function processed a request.');
 
     try {
-        // Use Managed Identity for authentication
-        const credential = new DefaultAzureCredential();
-        const blobServiceClient = new BlobServiceClient(storageAccountUrl, credential);
+        if (!sasToken) {
+            context.log.error('Missing SAS token');
+            context.res = {
+                status: 200,
+                body: { files: [] }
+            };
+            return;
+        }
+
+        // Use SAS token
+        const blobServiceClient = new BlobServiceClient(
+            `https://${storageAccountName}.blob.core.windows.net?${sasToken}`
+        );
         const containerClient = blobServiceClient.getContainerClient(containerName);
         
-        context.log('Listing blobs with Managed Identity...');
+        context.log('Listing blobs with SAS token...');
         
         const files = [];
         for await (const blob of containerClient.listBlobsFlat()) {
@@ -23,7 +32,7 @@ module.exports = async function (context, req) {
                 size: blob.properties.contentLength,
                 uploadDate: blob.properties.lastModified,
                 status: 'uploaded',
-                blobUrl: `${storageAccountUrl}/${containerName}/${blob.name}`
+                blobUrl: `https://${storageAccountName}.blob.core.windows.net/${containerName}/${blob.name}`
             });
         }
 
