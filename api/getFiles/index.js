@@ -19,9 +19,10 @@ module.exports = async function (context, req) {
         }
 
         // List blobs using REST API (no crypto/SDK needed)
-        const listUrl = `https://${storageAccountName}.blob.core.windows.net/${containerName}?${sasToken}&restype=container&comp=list`;
+        const listUrl = `https://${storageAccountName}.blob.core.windows.net/${containerName}?restype=container&comp=list&${sasToken}`;
         
-        context.log('Fetching files from:', listUrl.substring(0, 100) + '...');
+        context.log('Fetching files from blob storage...');
+        context.log('SAS token present:', !!sasToken);
         
         const response = await axios.get(listUrl);
         

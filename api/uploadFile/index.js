@@ -57,7 +57,10 @@ module.exports = async function (context, req) {
         // Upload using REST API with SAS token (no crypto/SDK needed)
         const blobUrl = `https://${storageAccountName}.blob.core.windows.net/${containerName}/${encodeURIComponent(fileName)}?${sasToken}`;
         
-        context.log('Uploading to:', blobUrl.substring(0, 100) + '...');
+        context.log('Uploading to blob storage...');
+        context.log('File name:', fileName);
+        context.log('File size:', fileData.length);
+        context.log('SAS token present:', !!sasToken);
         
         const response = await axios.put(blobUrl, fileData, {
             headers: {
