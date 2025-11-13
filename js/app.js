@@ -423,6 +423,7 @@ async function confirmTranslation() {
 // Poll translation status for async jobs
 async function pollTranslationStatus(jobId, displayName, maxAttempts = 60) {
     let attempts = 0;
+    let pollInterval = null;
     
     const checkStatus = async () => {
         try {
@@ -440,17 +441,17 @@ async function pollTranslationStatus(jobId, displayName, maxAttempts = 60) {
 
             if (status.status === 'completed') {
                 // Translation completed successfully
-                clearInterval(pollInterval);
+                if (pollInterval) clearInterval(pollInterval);
                 showToast(`Tłumaczenie zakończone: ${displayName}`);
                 loadFiles(); // Reload to show new translation
             } else if (status.status === 'failed') {
                 // Translation failed
-                clearInterval(pollInterval);
+                if (pollInterval) clearInterval(pollInterval);
                 showToast('Tłumaczenie nie powiodło się', 'error');
                 alert('Błąd podczas tłumaczenia: ' + (status.error || 'Unknown error'));
             } else if (attempts >= maxAttempts) {
                 // Timeout
-                clearInterval(pollInterval);
+                if (pollInterval) clearInterval(pollInterval);
                 showToast('Przekroczono limit czasu tłumaczenia', 'error');
                 alert('Tłumaczenie trwa zbyt długo. Sprawdź później w zakładce Historia.');
             }
@@ -458,7 +459,7 @@ async function pollTranslationStatus(jobId, displayName, maxAttempts = 60) {
 
         } catch (error) {
             console.error('Error checking translation status:', error);
-            clearInterval(pollInterval);
+            if (pollInterval) clearInterval(pollInterval);
             showToast('Błąd podczas sprawdzania statusu', 'error');
         }
     };
@@ -467,7 +468,7 @@ async function pollTranslationStatus(jobId, displayName, maxAttempts = 60) {
     await checkStatus();
     
     // Then poll every 3 seconds
-    const pollInterval = setInterval(checkStatus, 3000);
+    pollInterval = setInterval(checkStatus, 3000);
 }
 
 // Download file from storage

@@ -156,7 +156,8 @@ async function startDocumentTranslation(sourceFileName, targetLanguage) {
             }
         });
         
-        const jobId = translationResponse.headers['operation-location'].split('/').pop();
+        const operationLocation = translationResponse.headers['operation-location'];
+        const jobId = operationLocation.split('/').pop().split('?')[0];
         console.log('Translation job started:', jobId);
         
         return {
