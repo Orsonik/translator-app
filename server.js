@@ -124,9 +124,10 @@ async function startDocumentTranslation(sourceFileName, targetLanguage) {
         
         console.log('File copied to source-docs:', uniqueSourceFileName);
         
-        // Generate SAS URLs (r=read, w=write, a=add, c=create, d=delete)
-        const sourceUrl = generateContainerSasUrl('source-docs', 'r');
-        const targetUrl = generateContainerSasUrl('translated-docs', 'racwd');
+        // Generate SAS URLs (r=read, l=list, w=write, a=add, c=create, d=delete)
+        // Source needs 'rl' (read + list) for Document Translation API
+        const sourceUrl = generateContainerSasUrl('source-docs', 'rl');
+        const targetUrl = generateContainerSasUrl('translated-docs', 'racwdl');
         
         console.log('Starting document translation...');
         console.log('Source URL:', sourceUrl.substring(0, 100) + '...');
