@@ -562,7 +562,6 @@
             <div class="collapse navbar-collapse" id="navbarResponsive">
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item"><a class="nav-link" href="#translate">Szybkie Tłumaczenia</a></li>
-                    <li class="nav-item"><a class="nav-link" href="#translate-files">Tłumaczenie Plików</a></li>
                     <li class="nav-item"><a class="nav-link" href="#files">Zarządzanie Plikami</a></li>
                     <li class="nav-item"><a class="nav-link" href="#history">Historia</a></li>
                 </ul>
@@ -638,82 +637,6 @@
                         <div id="translationLoading" class="loading">
                             <div class="spinner"></div>
                             <p class="text-white-50 mt-3">Tłumaczenie w toku...</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- File Translation Section -->
-    <section class="app-section" id="translate-files" style="background-color: #0d0d0d;">
-        <div class="container px-4 px-lg-5">
-            <div class="row gx-4 gx-lg-5 justify-content-center">
-                <div class="col-lg-10">
-                    <h2 class="text-white mb-4 text-center">Tłumaczenie Plików</h2>
-                    <p class="text-white-50 text-center mb-4">Prześlij plik i przetłumacz cały dokument</p>
-                    
-                    <div class="card">
-                        <h4 class="text-white mb-3">Wybierz plik do tłumaczenia</h4>
-                        <p class="text-white-50 mb-3">Obsługiwane formaty: .txt, .docx, .pdf</p>
-                        
-                        <!-- File input for translation -->
-                        <input type="file" id="translateFileInput" style="display: none;" accept=".txt,.doc,.docx,.pdf" />
-                        
-                        <!-- Selected file info -->
-                        <div id="translateFileInfo" class="mb-3" style="display: none;">
-                            <div class="translation-box">
-                                <i class="fas fa-file-alt text-white-50"></i>
-                                <span id="translateFileName" class="text-white ms-2"></span>
-                                <span id="translateFileSize" class="text-white-50 ms-2"></span>
-                            </div>
-                        </div>
-
-                        <!-- Language selector -->
-                        <div class="language-selector mb-4" id="fileLanguageSelector" style="display: none;">
-                            <div style="flex: 1;">
-                                <label class="text-white-50">Język docelowy</label>
-                                <select id="fileTargetLanguage">
-                                    <option value="pl">Polski</option>
-                                    <option value="en">Angielski</option>
-                                    <option value="de">Niemiecki</option>
-                                    <option value="fr">Francuski</option>
-                                    <option value="es">Hiszpański</option>
-                                    <option value="it">Włoski</option>
-                                    <option value="ru">Rosyjski</option>
-                                    <option value="ja">Japoński</option>
-                                    <option value="zh-Hans">Chiński (uproszczony)</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <div class="text-center">
-                            <button onclick="selectTranslateFile()" class="btn-translator">
-                                <i class="fas fa-folder-open"></i> Wybierz Plik
-                            </button>
-                            <button onclick="translateFile()" id="translateFileButton" class="btn-translator ms-2" style="display: none;">
-                                <i class="fas fa-language"></i> Przetłumacz Plik
-                            </button>
-                        </div>
-
-                        <div id="translateFileLoading" class="loading">
-                            <div class="spinner"></div>
-                            <p>Tłumaczenie w toku...</p>
-                        </div>
-
-                        <div id="translateFileResult" style="display: none;">
-                            <h5 class="text-white mt-4">Przetłumaczony plik:</h5>
-                            <div class="translation-box">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <i class="fas fa-file-download text-success"></i>
-                                        <span id="translatedFileName" class="text-white ms-2"></span>
-                                    </div>
-                                    <button onclick="downloadTranslatedFile()" class="btn-translator btn-sm">
-                                        <i class="fas fa-download"></i> Pobierz
-                                    </button>
-                                </div>
-                            </div>
                         </div>
                     </div>
                 </div>
