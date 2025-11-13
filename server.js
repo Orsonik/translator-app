@@ -792,6 +792,11 @@ app.get('/api/translationStatus/:jobId', async (req, res) => {
 
         const status = statusResponse.data;
         console.log('Job status:', status.status);
+        
+        // Log full response for debugging
+        if (status.status === 'ValidationFailed' || status.status === 'Failed') {
+            console.log('Job details:', JSON.stringify(status, null, 2));
+        }
 
         // Update job info
         jobInfo.status = status.status;
@@ -816,11 +821,12 @@ app.get('/api/translationStatus/:jobId', async (req, res) => {
                 translatedFileName: jobInfo.translatedFileName,
                 message: 'Translation completed successfully'
             });
-        } else if (status.status === 'Failed') {
+        } else if (status.status === 'Failed' || status.status === 'ValidationFailed') {
             return res.json({
                 status: 'failed',
                 jobId: jobId,
-                error: status.error || 'Translation failed',
+                error: status.error || status.message || 'Translation failed',
+                details: status,
                 message: 'Translation job failed'
             });
         } else {
