@@ -68,7 +68,7 @@ document.getElementById('fileInput')?.addEventListener('change', function(e) {
         document.getElementById('selectedFileName').textContent = file.name;
         document.getElementById('selectedFileSize').textContent = `(${(file.size / 1024).toFixed(2)} KB)`;
         document.getElementById('selectedFileInfo').style.display = 'block';
-        document.getElementById('uploadButton').style.display = 'inline-flex';
+        document.getElementById('uploadButton').style.display = 'inline-block';
     } else {
         // Hide if no file selected
         document.getElementById('selectedFileInfo').style.display = 'none';
