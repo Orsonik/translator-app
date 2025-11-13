@@ -70,7 +70,7 @@ document.getElementById('fileInput')?.addEventListener('change', function(e) {
         document.getElementById('selectedFileName').textContent = file.name;
         document.getElementById('selectedFileSize').textContent = `(${(file.size / 1024).toFixed(2)} KB)`;
         document.getElementById('selectedFileInfo').style.display = 'block';
-        document.getElementById('uploadButton').style.display = 'inline-block';
+        document.getElementById('uploadButton').style.display = 'inline-flex';
     } else {
         // Hide if no file selected
         document.getElementById('selectedFileInfo').style.display = 'none';
@@ -118,7 +118,7 @@ async function uploadFile() {
             throw new Error(data.error || data.message || 'Błąd wgrywania pliku');
         }
 
-        alert(`Plik wgrany pomyślnie: ${data.fileName}`);
+        showToast('Plik został wgrany pomyślnie');
         
         // Clear input and UI
         fileInput.value = '';
