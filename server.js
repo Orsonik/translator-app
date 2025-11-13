@@ -2,11 +2,13 @@ const express = require('express');
 const path = require('path');
 const multer = require('multer');
 const { DefaultAzureCredential } = require('@azure/identity');
-const { BlobServiceClient } = require('@azure/storage-blob');
+const { BlobServiceClient, generateBlobSASQueryParameters, BlobSASPermissions, StorageSharedKeyCredential } = require('@azure/storage-blob');
 const { CosmosClient } = require('@azure/cosmos');
 const axios = require('axios');
 const mammoth = require('mammoth');
 const pdfParse = require('pdf-parse');
+const DocumentTranslator = require('@azure-rest/ai-document-translator').default;
+const { AzureKeyCredential } = require('@azure/core-auth');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -36,10 +38,19 @@ const translatorEndpoint = process.env.TRANSLATOR_ENDPOINT || 'https://api.cogni
 const translatorRegion = process.env.TRANSLATOR_REGION || 'westeurope';
 const cosmosEndpoint = process.env.COSMOS_ENDPOINT || 'https://translator-db-pl.documents.azure.com:443/';
 
+// Document Translation configuration
+const docTranslatorKey = process.env.DOC_TRANSLATOR_KEY;
+const docTranslatorEndpoint = process.env.DOC_TRANSLATOR_ENDPOINT || 'https://westeurope.api.cognitive.microsoft.com/';
+
+// Storage account key for SAS generation (from environment or Azure Key Vault)
+const storageAccountKey = process.env.STORAGE_ACCOUNT_KEY;
+
 // Initialize Azure clients with Managed Identity
 let blobServiceClient;
 let cosmosClient;
 let container;
+let documentTranslatorClient;
+let sharedKeyCredential;
 
 try {
     const credential = new DefaultAzureCredential();
@@ -48,6 +59,15 @@ try {
     blobServiceClient = new BlobServiceClient(
         `https://${storageAccountName}.blob.core.windows.net`,
         credential
+    );
+    
+    // Shared key credential for SAS generation
+    sharedKeyCredential = new StorageSharedKeyCredential(storageAccountName, storageAccountKey);
+    
+    // Document Translation client
+    documentTranslatorClient = DocumentTranslator(
+        docTranslatorEndpoint,
+        new AzureKeyCredential(docTranslatorKey)
     );
     
     // Cosmos DB client
@@ -60,9 +80,94 @@ try {
     container = database.container('Translations');
     
     console.log('Azure clients initialized with Managed Identity');
+    console.log('Document Translation client initialized');
 } catch (error) {
     console.error('Error initializing Azure clients:', error.message);
 }
+
+// Helper function: Generate SAS URL for blob container
+function generateContainerSasUrl(containerName, permissions = 'racwdl') {
+    const expiresOn = new Date();
+    expiresOn.setHours(expiresOn.getHours() + 2); // 2 hours validity
+    
+    const sasToken = generateBlobSASQueryParameters({
+        containerName,
+        permissions: BlobSASPermissions.parse(permissions),
+        expiresOn
+    }, sharedKeyCredential).toString();
+    
+    return `https://${storageAccountName}.blob.core.windows.net/${containerName}?${sasToken}`;
+}
+
+// Helper function: Start Document Translation job
+async function startDocumentTranslation(sourceFileName, targetLanguage) {
+    try {
+        const timestamp = Date.now();
+        const uniqueSourceFileName = `${timestamp}_${sourceFileName}`;
+        
+        // Copy file from source-files to source-docs container
+        const sourceContainerClient = blobServiceClient.getContainerClient('source-files');
+        const sourceBlobClient = sourceContainerClient.getBlobClient(sourceFileName);
+        
+        const docSourceContainerClient = blobServiceClient.getContainerClient('source-docs');
+        const docSourceBlobClient = docSourceContainerClient.getBlobClient(uniqueSourceFileName);
+        
+        // Copy blob
+        const downloadResponse = await sourceBlobClient.download();
+        const fileData = await streamToBuffer(downloadResponse.readableStreamBody);
+        await docSourceBlobClient.upload(fileData, fileData.length);
+        
+        console.log('File copied to source-docs:', uniqueSourceFileName);
+        
+        // Generate SAS URLs
+        const sourceUrl = generateContainerSasUrl('source-docs', 'rl');
+        const targetUrl = generateContainerSasUrl('translated-docs', 'racwdl');
+        
+        console.log('Starting document translation...');
+        console.log('Source URL:', sourceUrl.substring(0, 100) + '...');
+        console.log('Target URL:', targetUrl.substring(0, 100) + '...');
+        
+        // Start translation using REST API
+        const translationResponse = await axios({
+            method: 'POST',
+            url: `${docTranslatorEndpoint}translator/document/batches`,
+            headers: {
+                'Ocp-Apim-Subscription-Key': docTranslatorKey,
+                'Content-Type': 'application/json'
+            },
+            data: {
+                inputs: [{
+                    source: {
+                        sourceUrl: sourceUrl,
+                        filter: {
+                            prefix: uniqueSourceFileName
+                        }
+                    },
+                    targets: [{
+                        targetUrl: targetUrl,
+                        language: targetLanguage
+                    }]
+                }]
+            }
+        });
+        
+        const jobId = translationResponse.headers['operation-location'].split('/').pop();
+        console.log('Translation job started:', jobId);
+        
+        return {
+            jobId,
+            sourceFileName: uniqueSourceFileName,
+            targetLanguage
+        };
+        
+    } catch (error) {
+        console.error('Error starting document translation:', error.response?.data || error.message);
+        throw error;
+    }
+}
+
+// In-memory job tracking (in production, use Redis or Cosmos DB)
+const translationJobs = new Map();
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -470,13 +575,49 @@ app.post('/api/translateExistingFile', async (req, res) => {
     console.log('Translate existing file request received');
     
     try {
-        const { fileName, targetLanguage } = req.body;
+        const { fileName, targetLanguage, preserveFormatting } = req.body;
         
         if (!fileName || !targetLanguage) {
             return res.status(400).json({ error: 'Missing fileName or targetLanguage' });
         }
 
-        console.log('Translating existing file:', fileName, 'to', targetLanguage);
+        // Extract original filename and extension
+        const match = fileName.match(/^\d+_(.*)/);
+        const originalFileName = match ? match[1] : fileName;
+        const fileExtension = originalFileName.split('.').pop().toLowerCase();
+
+        console.log('Translating existing file:', fileName, 'to', targetLanguage, 'preserveFormatting:', preserveFormatting);
+
+        // Check if we should use Document Translation API
+        const useDocumentTranslation = preserveFormatting && (fileExtension === 'docx' || fileExtension === 'doc');
+
+        if (useDocumentTranslation) {
+            // Use Azure Document Translation API (async)
+            console.log('Using Azure Document Translation API for formatting preservation');
+            
+            const jobInfo = await startDocumentTranslation(fileName, targetLanguage);
+            
+            // Store job info for status tracking
+            translationJobs.set(jobInfo.jobId, {
+                jobId: jobInfo.jobId,
+                sourceFileName: fileName,
+                displayFileName: originalFileName,
+                targetLanguage: targetLanguage,
+                status: 'NotStarted',
+                createdAt: new Date().toISOString()
+            });
+            
+            // Return job ID for polling
+            return res.json({
+                success: true,
+                async: true,
+                jobId: jobInfo.jobId,
+                message: 'Translation job started. Use /api/translationStatus/:jobId to check progress.'
+            });
+        }
+
+        // Original text-based translation (instant)
+        console.log('Using text-based translation (instant)');
 
         // Download file from source-files container
         const sourceContainerClient = blobServiceClient.getContainerClient(containerName);
@@ -484,11 +625,6 @@ app.post('/api/translateExistingFile', async (req, res) => {
         
         const downloadResponse = await blobClient.download();
         const fileData = await streamToBuffer(downloadResponse.readableStreamBody);
-        
-        // Extract original filename and extension
-        const match = fileName.match(/^\d+_(.*)/);
-        const originalFileName = match ? match[1] : fileName;
-        const fileExtension = originalFileName.split('.').pop().toLowerCase();
 
         console.log('Downloaded file:', originalFileName, 'size:', fileData.length);
 
@@ -623,6 +759,81 @@ app.post('/api/translateExistingFile', async (req, res) => {
         res.status(500).json({ 
             error: error.message || 'Internal server error',
             message: 'File translation failed. Please try again.'
+        });
+    }
+});
+
+// Check status of async document translation
+app.get('/api/translationStatus/:jobId', async (req, res) => {
+    console.log('Translation status check:', req.params.jobId);
+    
+    try {
+        const { jobId } = req.params;
+        const jobInfo = translationJobs.get(jobId);
+        
+        if (!jobInfo) {
+            return res.status(404).json({ error: 'Job not found' });
+        }
+
+        // Query Azure Document Translation API for status
+        const statusResponse = await axios({
+            method: 'GET',
+            url: `${docTranslatorEndpoint}translator/document/batches/${jobId}`,
+            headers: {
+                'Ocp-Apim-Subscription-Key': docTranslatorKey
+            }
+        });
+
+        const status = statusResponse.data;
+        console.log('Job status:', status.status);
+
+        // Update job info
+        jobInfo.status = status.status;
+        jobInfo.lastChecked = new Date().toISOString();
+
+        if (status.status === 'Succeeded') {
+            // Find translated file in translated-docs container
+            const translatedDocsClient = blobServiceClient.getContainerClient('translated-docs');
+            
+            for await (const blob of translatedDocsClient.listBlobsFlat()) {
+                if (blob.name.includes(jobInfo.targetLanguage)) {
+                    jobInfo.translatedFileName = blob.name;
+                    jobInfo.translatedBlobUrl = `https://${storageAccountName}.blob.core.windows.net/translated-docs/${blob.name}`;
+                    break;
+                }
+            }
+
+            return res.json({
+                status: 'completed',
+                jobId: jobId,
+                progress: 100,
+                translatedFileName: jobInfo.translatedFileName,
+                message: 'Translation completed successfully'
+            });
+        } else if (status.status === 'Failed') {
+            return res.json({
+                status: 'failed',
+                jobId: jobId,
+                error: status.error || 'Translation failed',
+                message: 'Translation job failed'
+            });
+        } else {
+            // Running, NotStarted, Cancelling, etc.
+            const progress = Math.min(90, (status.documentsSucceeded || 0) * 100);
+            
+            return res.json({
+                status: 'processing',
+                jobId: jobId,
+                progress: progress,
+                message: `Translation in progress: ${status.status}`
+            });
+        }
+
+    } catch (error) {
+        console.error('Error checking translation status:', error.response?.data || error.message);
+        res.status(500).json({ 
+            error: error.message,
+            message: 'Failed to check translation status'
         });
     }
 });

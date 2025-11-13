@@ -355,6 +355,16 @@ let currentFileToTranslate = { fileName: '', displayName: '' };
 function showLanguageModal(fileName, displayName) {
     currentFileToTranslate = { fileName, displayName };
     document.getElementById('modalFileName').textContent = displayName;
+    
+    // Show formatting checkbox only for DOCX/DOC files
+    const fileExtension = displayName.toLowerCase().split('.').pop();
+    const formattingContainer = document.getElementById('formattingCheckboxContainer');
+    if (fileExtension === 'docx' || fileExtension === 'doc') {
+        formattingContainer.style.display = 'block';
+    } else {
+        formattingContainer.style.display = 'none';
+    }
+    
     const modal = new bootstrap.Modal(document.getElementById('languageModal'));
     modal.show();
 }
@@ -363,13 +373,16 @@ function showLanguageModal(fileName, displayName) {
 async function confirmTranslation() {
     const targetLanguage = document.getElementById('modalTargetLanguage').value;
     const { fileName, displayName } = currentFileToTranslate;
+    const preserveFormatting = document.getElementById('preserveFormatting').checked;
+    const fileExtension = displayName.toLowerCase().split('.').pop();
+    const canPreserveFormatting = (fileExtension === 'docx' || fileExtension === 'doc') && preserveFormatting;
 
     // Close modal
     const modal = bootstrap.Modal.getInstance(document.getElementById('languageModal'));
     modal.hide();
 
     try {
-        console.log('Translating existing file:', fileName, 'to', targetLanguage);
+        console.log('Translating existing file:', fileName, 'to', targetLanguage, 'preserveFormatting:', canPreserveFormatting);
 
         const response = await fetch(`${API_BASE}/translateExistingFile`, {
             method: 'POST',
@@ -378,7 +391,8 @@ async function confirmTranslation() {
             },
             body: JSON.stringify({
                 fileName: fileName,
-                targetLanguage: targetLanguage
+                targetLanguage: targetLanguage,
+                preserveFormatting: canPreserveFormatting
             })
         });
 
@@ -390,15 +404,70 @@ async function confirmTranslation() {
         const result = await response.json();
         console.log('Translation result:', result);
 
-        showToast('Plik został przetłumaczony');
-        
-        // Reload files list to show new translation
-        loadFiles();
+        if (result.async && result.jobId) {
+            // Async translation with formatting preservation
+            showToast('Tłumaczenie rozpoczęte. Może potrwać 10-30 sekund...', 'info');
+            pollTranslationStatus(result.jobId, displayName);
+        } else {
+            // Instant text-based translation
+            showToast('Plik został przetłumaczony');
+            loadFiles();
+        }
 
     } catch (error) {
         console.error('Error translating existing file:', error);
         alert('Błąd podczas tłumaczenia pliku: ' + error.message);
     }
+}
+
+// Poll translation status for async jobs
+async function pollTranslationStatus(jobId, displayName, maxAttempts = 60) {
+    let attempts = 0;
+    
+    const checkStatus = async () => {
+        try {
+            attempts++;
+            console.log(`Checking translation status (attempt ${attempts}/${maxAttempts})...`);
+
+            const response = await fetch(`${API_BASE}/translationStatus/${jobId}`);
+            
+            if (!response.ok) {
+                throw new Error('Failed to check status');
+            }
+
+            const status = await response.json();
+            console.log('Translation status:', status);
+
+            if (status.status === 'completed') {
+                // Translation completed successfully
+                clearInterval(pollInterval);
+                showToast(`Tłumaczenie zakończone: ${displayName}`);
+                loadFiles(); // Reload to show new translation
+            } else if (status.status === 'failed') {
+                // Translation failed
+                clearInterval(pollInterval);
+                showToast('Tłumaczenie nie powiodło się', 'error');
+                alert('Błąd podczas tłumaczenia: ' + (status.error || 'Unknown error'));
+            } else if (attempts >= maxAttempts) {
+                // Timeout
+                clearInterval(pollInterval);
+                showToast('Przekroczono limit czasu tłumaczenia', 'error');
+                alert('Tłumaczenie trwa zbyt długo. Sprawdź później w zakładce Historia.');
+            }
+            // else: still processing, continue polling
+
+        } catch (error) {
+            console.error('Error checking translation status:', error);
+            clearInterval(pollInterval);
+            showToast('Błąd podczas sprawdzania statusu', 'error');
+        }
+    };
+
+    // Check immediately
+    await checkStatus();
+    
+    // Then poll every 3 seconds
+    const pollInterval = setInterval(checkStatus, 3000);
 }
 
 // Download file from storage
