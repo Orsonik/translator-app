@@ -92,13 +92,16 @@ try {
 
 // Helper function: Generate SAS URL for blob container
 function generateContainerSasUrl(containerName, permissions = 'racwdl') {
+    const startsOn = new Date();
     const expiresOn = new Date();
     expiresOn.setHours(expiresOn.getHours() + 2); // 2 hours validity
     
     const sasToken = generateBlobSASQueryParameters({
         containerName,
         permissions: ContainerSASPermissions.parse(permissions),
-        expiresOn
+        startsOn,
+        expiresOn,
+        version: '2021-12-02'
     }, sharedKeyCredential).toString();
     
     return `https://${storageAccountName}.blob.core.windows.net/${containerName}?${sasToken}`;
