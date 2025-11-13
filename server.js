@@ -507,7 +507,7 @@ app.get('/api/getFiles', async (req, res) => {
             });
         }
 
-        // Get files from translated-files container
+        // Get files from translated-files container (text-based translations)
         const translatedContainerClient = blobServiceClient.getContainerClient('translated-files');
         console.log('Listing translated files with Managed Identity...');
         
@@ -517,6 +517,19 @@ app.get('/api/getFiles', async (req, res) => {
                 size: blob.properties.contentLength,
                 uploadDate: blob.properties.lastModified,
                 blobUrl: `https://${storageAccountName}.blob.core.windows.net/translated-files/${blob.name}`
+            });
+        }
+
+        // Get files from translated-docs container (Document Translation API results)
+        const translatedDocsClient = blobServiceClient.getContainerClient('translated-docs');
+        console.log('Listing translated docs with Managed Identity...');
+        
+        for await (const blob of translatedDocsClient.listBlobsFlat()) {
+            translatedFiles.push({
+                fileName: blob.name,
+                size: blob.properties.contentLength,
+                uploadDate: blob.properties.lastModified,
+                blobUrl: `https://${storageAccountName}.blob.core.windows.net/translated-docs/${blob.name}`
             });
         }
 
@@ -530,19 +543,30 @@ app.get('/api/getFiles', async (req, res) => {
             
             // Find all translations for this file
             const translations = translatedFiles.filter(tf => {
-                // Translated files format: timestamp_translated_LANG_originalname.txt
-                const translatedMatch = tf.fileName.match(/^\d+_translated_([a-z]{2})_(.*?)\.txt$/);
-                if (!translatedMatch) return false;
+                // Format 1: Text-based translations - timestamp_translated_LANG_originalname.txt
+                const textTranslationMatch = tf.fileName.match(/^\d+_translated_([a-z]{2})_(.*?)\.txt$/);
+                if (textTranslationMatch) {
+                    const [, language, baseName] = textTranslationMatch;
+                    const baseOriginalName = originalName.replace(/\.[^/.]+$/, '');
+                    return baseName === baseOriginalName;
+                }
                 
-                const [, language, baseName] = translatedMatch;
-                // Remove extension from original name for comparison
-                const baseOriginalName = originalName.replace(/\.[^/.]+$/, '');
-                return baseName === baseOriginalName;
+                // Format 2: Document Translation API - LANG/timestamp_originalname.extension
+                const docTranslationMatch = tf.fileName.match(/^([a-z]{2})\/(.+)$/);
+                if (docTranslationMatch) {
+                    const [, language, docFileName] = docTranslationMatch;
+                    return docFileName === sourceFile.fileName;
+                }
+                
+                return false;
             }).map(tf => {
-                const translatedMatch = tf.fileName.match(/^\d+_translated_([a-z]{2})_(.*?)\.txt$/);
+                // Extract language from either format
+                const textMatch = tf.fileName.match(/^\d+_translated_([a-z]{2})_(.*?)\.txt$/);
+                const docMatch = tf.fileName.match(/^([a-z]{2})\//);
+                
                 return {
                     fileName: tf.fileName,
-                    language: translatedMatch ? translatedMatch[1] : 'unknown',
+                    language: textMatch ? textMatch[1] : (docMatch ? docMatch[1] : 'unknown'),
                     size: tf.size,
                     uploadDate: tf.uploadDate,
                     blobUrl: tf.blobUrl
