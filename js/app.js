@@ -171,7 +171,10 @@ async function loadFiles() {
                                         <div>
                                             <i class="fas fa-file text-primary"></i> 
                                             <strong>${group.originalFile.displayName}</strong>
-                                            <button class="btn btn-sm btn-link text-white-50 p-0 ms-2" onclick="downloadFile('${group.originalFile.fileName}', 'source-files')" title="Pobierz">
+                                            <button class="btn btn-sm btn-link text-white-50 p-0 ms-2 download-btn" 
+                                                data-filename="${group.originalFile.fileName}" 
+                                                data-container="source-files" 
+                                                title="Pobierz">
                                                 <i class="fas fa-download"></i>
                                             </button>
                                         </div>
@@ -186,7 +189,10 @@ async function loadFiles() {
                                                 <div class="mb-1 d-flex align-items-center">
                                                     <span class="badge bg-info me-2">${trans.language.toUpperCase()}</span>
                                                     <small class="text-white-50 flex-grow-1">${(trans.size / 1024).toFixed(2)} KB</small>
-                                                    <button class="btn btn-sm btn-link text-white-50 p-0" onclick="downloadFile('${trans.fileName}', 'translated-files')" title="Pobierz">
+                                                    <button class="btn btn-sm btn-link text-white-50 p-0 download-btn" 
+                                                        data-filename="${trans.fileName}" 
+                                                        data-container="translated-files" 
+                                                        title="Pobierz">
                                                         <i class="fas fa-download"></i>
                                                     </button>
                                                 </div>
@@ -195,10 +201,16 @@ async function loadFiles() {
                                         }
                                     </td>
                                     <td>
-                                        <button class="btn btn-sm btn-success mb-1" onclick="showLanguageModal('${group.originalFile.fileName}', '${group.originalFile.displayName}')" title="Przetłumacz plik">
+                                        <button class="btn btn-sm btn-success mb-1 translate-btn" 
+                                            data-filename="${group.originalFile.fileName}" 
+                                            data-displayname="${group.originalFile.displayName}" 
+                                            title="Przetłumacz plik">
                                             <i class="fas fa-language"></i>
                                         </button>
-                                        <button class="btn btn-sm btn-danger" onclick="deleteFile('${group.originalFile.fileName}', '${group.originalFile.displayName}')" title="Usuń plik">
+                                        <button class="btn btn-sm btn-danger delete-btn" 
+                                            data-filename="${group.originalFile.fileName}" 
+                                            data-displayname="${group.originalFile.displayName}" 
+                                            title="Usuń plik">
                                             <i class="fas fa-trash"></i>
                                         </button>
                                     </td>
@@ -557,3 +569,37 @@ async function translateExistingFile(fileName, displayName) {
     // Redirect to new modal-based function
     showLanguageModal(fileName, displayName);
 }
+
+// Event delegation for dynamically created buttons
+document.addEventListener('DOMContentLoaded', function() {
+    // Delegate events on filesList container
+    const filesList = document.getElementById('filesList');
+    
+    if (filesList) {
+        filesList.addEventListener('click', function(e) {
+            const target = e.target.closest('button');
+            if (!target) return;
+            
+            // Download button
+            if (target.classList.contains('download-btn')) {
+                const fileName = target.dataset.filename;
+                const container = target.dataset.container;
+                downloadFile(fileName, container);
+            }
+            
+            // Translate button
+            if (target.classList.contains('translate-btn')) {
+                const fileName = target.dataset.filename;
+                const displayName = target.dataset.displayname;
+                showLanguageModal(fileName, displayName);
+            }
+            
+            // Delete button
+            if (target.classList.contains('delete-btn')) {
+                const fileName = target.dataset.filename;
+                const displayName = target.dataset.displayname;
+                deleteFile(fileName, displayName);
+            }
+        });
+    }
+});
