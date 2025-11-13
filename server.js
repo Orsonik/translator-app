@@ -525,6 +525,7 @@ app.get('/api/getFiles', async (req, res) => {
         console.log('Listing translated docs with Managed Identity...');
         
         for await (const blob of translatedDocsClient.listBlobsFlat()) {
+            console.log('Found translated doc:', blob.name);
             translatedFiles.push({
                 fileName: blob.name,
                 size: blob.properties.contentLength,
@@ -533,6 +534,7 @@ app.get('/api/getFiles', async (req, res) => {
             });
         }
 
+        console.log('Total translated files (from both containers):', translatedFiles.length);
         // Group files: match translated files with their source files
         const fileGroups = [];
         
