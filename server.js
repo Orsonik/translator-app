@@ -62,7 +62,12 @@ try {
     );
     
     // Shared key credential for SAS generation
-    sharedKeyCredential = new StorageSharedKeyCredential(storageAccountName, storageAccountKey);
+    if (storageAccountKey) {
+        sharedKeyCredential = new StorageSharedKeyCredential(storageAccountName, storageAccountKey);
+        console.log('Storage account key credential initialized for SAS generation');
+    } else {
+        console.warn('STORAGE_ACCOUNT_KEY not set - SAS generation will not work');
+    }
     
     // Document Translation client
     documentTranslatorClient = DocumentTranslator(
@@ -119,9 +124,9 @@ async function startDocumentTranslation(sourceFileName, targetLanguage) {
         
         console.log('File copied to source-docs:', uniqueSourceFileName);
         
-        // Generate SAS URLs
-        const sourceUrl = generateContainerSasUrl('source-docs', 'rl');
-        const targetUrl = generateContainerSasUrl('translated-docs', 'racwdl');
+        // Generate SAS URLs (r=read, w=write, a=add, c=create, d=delete)
+        const sourceUrl = generateContainerSasUrl('source-docs', 'r');
+        const targetUrl = generateContainerSasUrl('translated-docs', 'racwd');
         
         console.log('Starting document translation...');
         console.log('Source URL:', sourceUrl.substring(0, 100) + '...');
