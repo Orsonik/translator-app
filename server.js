@@ -2,7 +2,7 @@ const express = require('express');
 const path = require('path');
 const multer = require('multer');
 const { DefaultAzureCredential } = require('@azure/identity');
-const { BlobServiceClient, generateBlobSASQueryParameters, BlobSASPermissions, ContainerSASPermissions, StorageSharedKeyCredential } = require('@azure/storage-blob');
+const { BlobServiceClient, generateBlobSASQueryParameters, BlobSASPermissions, ContainerSASPermissions, StorageSharedKeyCredential, generateAccountSASQueryParameters, AccountSASPermissions, AccountSASResourceTypes, AccountSASServices } = require('@azure/storage-blob');
 const { CosmosClient } = require('@azure/cosmos');
 const axios = require('axios');
 const mammoth = require('mammoth');
@@ -90,11 +90,14 @@ try {
     console.error('Error initializing Azure clients:', error.message);
 }
 
-// Helper function: Generate SAS URL for blob container
-function generateContainerSasUrl(containerName, permissions = 'racwdl') {
+// Helper function: Generate SAS URL for blob container using User Delegation Key
+async function generateContainerSasUrl(containerName, permissions = 'racwdl') {
     const startsOn = new Date();
     const expiresOn = new Date();
     expiresOn.setHours(expiresOn.getHours() + 2); // 2 hours validity
+    
+    // Get user delegation key (uses Managed Identity, bypasses shared key policy)
+    const userDelegationKey = await blobServiceClient.getUserDelegationKey(startsOn, expiresOn);
     
     const sasToken = generateBlobSASQueryParameters({
         containerName,
@@ -102,7 +105,7 @@ function generateContainerSasUrl(containerName, permissions = 'racwdl') {
         startsOn,
         expiresOn,
         version: '2021-12-02'
-    }, sharedKeyCredential).toString();
+    }, userDelegationKey, storageAccountName).toString();
     
     return `https://${storageAccountName}.blob.core.windows.net/${containerName}?${sasToken}`;
 }
@@ -129,8 +132,8 @@ async function startDocumentTranslation(sourceFileName, targetLanguage) {
         
         // Generate SAS URLs (r=read, l=list, w=write, a=add, c=create, d=delete)
         // Source needs 'rl' (read + list) for Document Translation API
-        const sourceUrl = generateContainerSasUrl('source-docs', 'rl');
-        const targetUrl = generateContainerSasUrl('translated-docs', 'racwdl');
+        const sourceUrl = await generateContainerSasUrl('source-docs', 'rl');
+        const targetUrl = await generateContainerSasUrl('translated-docs', 'racwdl');
         
         console.log('Starting document translation...');
         console.log('Source URL:', sourceUrl.substring(0, 100) + '...');
