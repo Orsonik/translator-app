@@ -664,6 +664,109 @@ app.get('/api/getTranslations', async (req, res) => {
     }
 });
 
+// Download file from storage
+app.get('/api/downloadFile', async (req, res) => {
+    console.log('Download file request received');
+    
+    try {
+        const { fileName, container: containerType } = req.query;
+        
+        if (!fileName || !containerType) {
+            return res.status(400).json({ error: 'Missing fileName or container parameter' });
+        }
+
+        console.log('Downloading file:', fileName, 'from container:', containerType);
+
+        const containerClient = blobServiceClient.getContainerClient(containerType);
+        const blobClient = containerClient.getBlobClient(fileName);
+        
+        const downloadResponse = await blobClient.download();
+        const fileData = await streamToBuffer(downloadResponse.readableStreamBody);
+        
+        // Get content type
+        const properties = await blobClient.getProperties();
+        const contentType = properties.contentType || 'application/octet-stream';
+        
+        // Extract display name (remove timestamp prefix if present)
+        const match = fileName.match(/^\d+_(.*)/);
+        const displayName = match ? match[1] : fileName;
+
+        res.set({
+            'Content-Type': contentType,
+            'Content-Disposition': `attachment; filename="${displayName}"`,
+            'Content-Length': fileData.length
+        });
+        res.send(fileData);
+
+        console.log('File downloaded successfully:', displayName);
+
+    } catch (error) {
+        console.error('Error downloading file:', error);
+        res.status(500).json({ 
+            error: error.message || 'Internal server error',
+            message: 'File download failed. Please try again.'
+        });
+    }
+});
+
+// Delete file and its translations
+app.delete('/api/deleteFile', async (req, res) => {
+    console.log('Delete file request received');
+    
+    try {
+        const { fileName } = req.body;
+        
+        if (!fileName) {
+            return res.status(400).json({ error: 'Missing fileName parameter' });
+        }
+
+        console.log('Deleting file:', fileName);
+
+        // Delete original file from source-files
+        const sourceContainerClient = blobServiceClient.getContainerClient(containerName);
+        const sourceBlobClient = sourceContainerClient.getBlobClient(fileName);
+        await sourceBlobClient.deleteIfExists();
+        console.log('Deleted original file:', fileName);
+
+        // Find and delete all translations
+        const translatedContainerClient = blobServiceClient.getContainerClient('translated-files');
+        
+        // Extract original filename without timestamp
+        const match = fileName.match(/^\d+_(.*)/);
+        const originalName = match ? match[1] : fileName;
+        const baseOriginalName = originalName.replace(/\.[^/.]+$/, ''); // Remove extension
+        
+        let deletedTranslations = 0;
+        for await (const blob of translatedContainerClient.listBlobsFlat()) {
+            // Check if this translation belongs to the deleted file
+            const translatedMatch = blob.name.match(/^\d+_translated_([a-z]{2})_(.*?)\.txt$/);
+            if (translatedMatch) {
+                const [, language, baseName] = translatedMatch;
+                if (baseName === baseOriginalName) {
+                    const translatedBlobClient = translatedContainerClient.getBlobClient(blob.name);
+                    await translatedBlobClient.deleteIfExists();
+                    deletedTranslations++;
+                    console.log('Deleted translation:', blob.name);
+                }
+            }
+        }
+
+        console.log(`Deleted ${deletedTranslations} translations`);
+
+        res.json({ 
+            success: true,
+            message: `File deleted successfully along with ${deletedTranslations} translation(s)`
+        });
+
+    } catch (error) {
+        console.error('Error deleting file:', error);
+        res.status(500).json({ 
+            error: error.message || 'Internal server error',
+            message: 'File deletion failed. Please try again.'
+        });
+    }
+});
+
 // Redirect root to translator app
 app.get('/', (req, res) => {
     res.redirect('/translator.html');

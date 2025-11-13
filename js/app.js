@@ -171,6 +171,9 @@ async function loadFiles() {
                                         <div>
                                             <i class="fas fa-file text-primary"></i> 
                                             <strong>${group.originalFile.displayName}</strong>
+                                            <button class="btn btn-sm btn-link text-white-50 p-0 ms-2" onclick="downloadFile('${group.originalFile.fileName}', 'source-files')" title="Pobierz">
+                                                <i class="fas fa-download"></i>
+                                            </button>
                                         </div>
                                         <small class="text-white-50">
                                             ${new Date(group.originalFile.uploadDate).toLocaleString('pl-PL')} | 
@@ -180,18 +183,23 @@ async function loadFiles() {
                                     <td>
                                         ${group.translations.length > 0 
                                             ? group.translations.map(trans => `
-                                                <div class="mb-1">
+                                                <div class="mb-1 d-flex align-items-center">
                                                     <span class="badge bg-info me-2">${trans.language.toUpperCase()}</span>
-                                                    <small class="text-white-50">${trans.fileName}</small>
-                                                    <small class="text-white-50 ms-2">${(trans.size / 1024).toFixed(2)} KB</small>
+                                                    <small class="text-white-50 flex-grow-1">${(trans.size / 1024).toFixed(2)} KB</small>
+                                                    <button class="btn btn-sm btn-link text-white-50 p-0" onclick="downloadFile('${trans.fileName}', 'translated-files')" title="Pobierz">
+                                                        <i class="fas fa-download"></i>
+                                                    </button>
                                                 </div>
                                             `).join('')
                                             : '<small class="text-white-50">Brak tłumaczeń</small>'
                                         }
                                     </td>
                                     <td>
-                                        <button class="btn btn-sm btn-success" onclick="translateExistingFile('${group.originalFile.fileName}', '${group.originalFile.displayName}')" title="Przetłumacz plik">
+                                        <button class="btn btn-sm btn-success mb-1" onclick="showLanguageModal('${group.originalFile.fileName}', '${group.originalFile.displayName}')" title="Przetłumacz plik">
                                             <i class="fas fa-language"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-danger" onclick="deleteFile('${group.originalFile.fileName}', '${group.originalFile.displayName}')" title="Usuń plik">
+                                            <i class="fas fa-trash"></i>
                                         </button>
                                     </td>
                                 </tr>
@@ -412,32 +420,24 @@ function downloadTranslatedFile() {
 }
 
 // Translate existing file from library
-async function translateExistingFile(fileName, displayName) {
-    // Prompt user for target language
-    const languages = [
-        { code: 'en', name: 'Angielski' },
-        { code: 'pl', name: 'Polski' },
-        { code: 'de', name: 'Niemiecki' },
-        { code: 'fr', name: 'Francuski' },
-        { code: 'es', name: 'Hiszpański' },
-        { code: 'it', name: 'Włoski' },
-        { code: 'ru', name: 'Rosyjski' },
-        { code: 'uk', name: 'Ukraiński' },
-        { code: 'cs', name: 'Czeski' }
-    ];
+let currentFileToTranslate = { fileName: '', displayName: '' };
 
-    const languageOptions = languages.map(lang => `${lang.code}: ${lang.name}`).join('\n');
-    const targetLanguage = prompt(`Wybierz język docelowy dla pliku:\n${displayName}\n\nDostępne języki:\n${languageOptions}\n\nWpisz kod języka (np. en, pl, de):`);
+// Show language selection modal
+function showLanguageModal(fileName, displayName) {
+    currentFileToTranslate = { fileName, displayName };
+    document.getElementById('modalFileName').textContent = displayName;
+    const modal = new bootstrap.Modal(document.getElementById('languageModal'));
+    modal.show();
+}
 
-    if (!targetLanguage) {
-        return; // User cancelled
-    }
+// Confirm translation from modal
+async function confirmTranslation() {
+    const targetLanguage = document.getElementById('modalTargetLanguage').value;
+    const { fileName, displayName } = currentFileToTranslate;
 
-    // Validate language code
-    if (!languages.find(lang => lang.code === targetLanguage.toLowerCase())) {
-        alert('Nieprawidłowy kod języka. Użyj jednego z: ' + languages.map(l => l.code).join(', '));
-        return;
-    }
+    // Close modal
+    const modal = bootstrap.Modal.getInstance(document.getElementById('languageModal'));
+    modal.hide();
 
     try {
         console.log('Translating existing file:', fileName, 'to', targetLanguage);
@@ -449,7 +449,7 @@ async function translateExistingFile(fileName, displayName) {
             },
             body: JSON.stringify({
                 fileName: fileName,
-                targetLanguage: targetLanguage.toLowerCase()
+                targetLanguage: targetLanguage
             })
         });
 
@@ -470,4 +470,90 @@ async function translateExistingFile(fileName, displayName) {
         console.error('Error translating existing file:', error);
         alert('Błąd podczas tłumaczenia pliku: ' + error.message);
     }
+}
+
+// Download file from storage
+async function downloadFile(fileName, container) {
+    try {
+        console.log('Downloading file:', fileName, 'from:', container);
+
+        const response = await fetch(`${API_BASE}/downloadFile?fileName=${encodeURIComponent(fileName)}&container=${encodeURIComponent(container)}`);
+
+        if (!response.ok) {
+            throw new Error('Failed to download file');
+        }
+
+        const blob = await response.blob();
+        
+        // Extract filename from Content-Disposition or use default
+        const contentDisposition = response.headers.get('Content-Disposition');
+        let downloadName = fileName;
+        if (contentDisposition) {
+            const fileNameMatch = contentDisposition.match(/filename="(.+)"/);
+            if (fileNameMatch) {
+                downloadName = fileNameMatch[1];
+            }
+        }
+
+        // Create download link
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = downloadName;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        
+        console.log('File downloaded:', downloadName);
+
+    } catch (error) {
+        console.error('Error downloading file:', error);
+        alert('Błąd podczas pobierania pliku: ' + error.message);
+    }
+}
+
+// Delete file and its translations
+async function deleteFile(fileName, displayName) {
+    if (!confirm(`Czy na pewno chcesz usunąć plik "${displayName}"?\n\nZostaną usunięte także wszystkie jego tłumaczenia.`)) {
+        return;
+    }
+
+    try {
+        console.log('Deleting file:', fileName);
+
+        const response = await fetch(`${API_BASE}/deleteFile`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                fileName: fileName
+            })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || 'Deletion failed');
+        }
+
+        const result = await response.json();
+        console.log('Deletion result:', result);
+
+        alert(result.message);
+        
+        // Reload files list
+        loadFiles();
+
+    } catch (error) {
+        console.error('Error deleting file:', error);
+        alert('Błąd podczas usuwania pliku: ' + error.message);
+    }
+}
+
+// Legacy function - kept for compatibility
+async function translateExistingFile(fileName, displayName) {
+    // Redirect to new modal-based function
+    showLanguageModal(fileName, displayName);
 }

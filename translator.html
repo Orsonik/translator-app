@@ -372,6 +372,43 @@
         </div>
     </footer>
 
+    <!-- Language Selection Modal -->
+    <div class="modal fade" id="languageModal" tabindex="-1" aria-labelledby="languageModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content bg-dark text-white">
+                <div class="modal-header border-secondary">
+                    <h5 class="modal-title" id="languageModalLabel">
+                        <i class="fas fa-language"></i> Wybierz język tłumaczenia
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-white-50 mb-3">Plik: <strong id="modalFileName"></strong></p>
+                    <label class="text-white-50 mb-2">Język docelowy:</label>
+                    <select id="modalTargetLanguage" class="form-select bg-dark text-white border-secondary">
+                        <option value="en">🇬🇧 Angielski (English)</option>
+                        <option value="pl">🇵🇱 Polski (Polish)</option>
+                        <option value="de">🇩🇪 Niemiecki (German)</option>
+                        <option value="fr">🇫🇷 Francuski (French)</option>
+                        <option value="es">🇪🇸 Hiszpański (Spanish)</option>
+                        <option value="it">🇮🇹 Włoski (Italian)</option>
+                        <option value="ru">🇷🇺 Rosyjski (Russian)</option>
+                        <option value="uk">🇺🇦 Ukraiński (Ukrainian)</option>
+                        <option value="cs">🇨🇿 Czeski (Czech)</option>
+                    </select>
+                </div>
+                <div class="modal-footer border-secondary">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times"></i> Anuluj
+                    </button>
+                    <button type="button" class="btn btn-primary" onclick="confirmTranslation()">
+                        <i class="fas fa-language"></i> Przetłumacz
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Bootstrap & Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="js/scripts.js"></script>
