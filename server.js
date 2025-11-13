@@ -524,13 +524,19 @@ app.get('/api/getFiles', async (req, res) => {
         const translatedDocsClient = blobServiceClient.getContainerClient('translated-docs');
         console.log('Listing translated docs with Managed Identity...');
         
-        for await (const blob of translatedDocsClient.listBlobsFlat()) {
+        for await (const blob of translatedDocsClient.listBlobsFlat({ includeMetadata: true })) {
             console.log('Found translated doc:', blob.name);
+            
+            // Extract target language from metadata (if available)
+            const targetLanguage = blob.metadata?.targetlanguage || blob.metadata?.targetLanguage;
+            
             translatedFiles.push({
                 fileName: blob.name,
                 size: blob.properties.contentLength,
                 uploadDate: blob.properties.lastModified,
-                blobUrl: `https://${storageAccountName}.blob.core.windows.net/translated-docs/${blob.name}`
+                blobUrl: `https://${storageAccountName}.blob.core.windows.net/translated-docs/${blob.name}`,
+                metadata: blob.metadata, // Include metadata for language extraction
+                targetLanguage: targetLanguage // Pre-extract for easier access
             });
         }
 
@@ -553,22 +559,42 @@ app.get('/api/getFiles', async (req, res) => {
                     return baseName === baseOriginalName;
                 }
                 
-                // Format 2: Document Translation API - LANG/timestamp_originalname.extension
-                const docTranslationMatch = tf.fileName.match(/^([a-z]{2})\/(.+)$/);
-                if (docTranslationMatch) {
-                    const [, language, docFileName] = docTranslationMatch;
-                    return docFileName === sourceFile.fileName;
+                // Format 2: Document Translation API - same name as source (timestamp_originalname.extension)
+                // These files are in translated-docs container with same name as source
+                // We need to match by checking if it's NOT the exact source file AND has same base name
+                if (tf.blobUrl.includes('translated-docs')) {
+                    // Extract timestamp from both files to compare base names
+                    const sourceTimestamp = sourceFile.fileName.match(/^(\d+)_/)?.[1];
+                    const translatedTimestamp = tf.fileName.match(/^(\d+)_/)?.[1];
+                    
+                    // Different timestamp = different upload, likely a translation
+                    // OR: Check if source file timestamp exists in translated file name but in different container
+                    const sourceBaseName = sourceFile.fileName.replace(/^\d+_/, '');
+                    const translatedBaseName = tf.fileName.replace(/^\d+_/, '');
+                    
+                    return translatedBaseName === sourceBaseName && sourceTimestamp !== translatedTimestamp;
                 }
                 
                 return false;
             }).map(tf => {
                 // Extract language from either format
                 const textMatch = tf.fileName.match(/^\d+_translated_([a-z]{2})_(.*?)\.txt$/);
-                const docMatch = tf.fileName.match(/^([a-z]{2})\//);
+                
+                // For Document Translation API files, get language from blob metadata
+                let language = 'unknown';
+                if (textMatch) {
+                    language = textMatch[1];
+                } else if (tf.targetLanguage) {
+                    // Use language from metadata (set during translation success)
+                    language = tf.targetLanguage;
+                } else if (tf.blobUrl.includes('translated-docs')) {
+                    // Fallback for files without metadata
+                    language = 'docx';
+                }
                 
                 return {
                     fileName: tf.fileName,
-                    language: textMatch ? textMatch[1] : (docMatch ? docMatch[1] : 'unknown'),
+                    language: language,
                     size: tf.size,
                     uploadDate: tf.uploadDate,
                     blobUrl: tf.blobUrl
@@ -831,10 +857,31 @@ app.get('/api/translationStatus/:jobId', async (req, res) => {
             // Find translated file in translated-docs container
             const translatedDocsClient = blobServiceClient.getContainerClient('translated-docs');
             
+            // Extract base name from source file to find the translated version
+            const sourceBaseName = jobInfo.sourceFileName.replace(/^\d+_/, '');
+            
             for await (const blob of translatedDocsClient.listBlobsFlat()) {
-                if (blob.name.includes(jobInfo.targetLanguage)) {
+                const translatedBaseName = blob.name.replace(/^\d+_/, '');
+                
+                // Match by base name (without timestamp)
+                if (translatedBaseName === sourceBaseName) {
                     jobInfo.translatedFileName = blob.name;
                     jobInfo.translatedBlobUrl = `https://${storageAccountName}.blob.core.windows.net/translated-docs/${blob.name}`;
+                    
+                    // Add metadata with target language to the blob
+                    try {
+                        const blobClient = translatedDocsClient.getBlobClient(blob.name);
+                        await blobClient.setMetadata({
+                            targetLanguage: jobInfo.targetLanguage,
+                            sourceFileName: jobInfo.sourceFileName,
+                            translatedAt: new Date().toISOString()
+                        });
+                        console.log(`Added metadata to translated file: ${blob.name} (language: ${jobInfo.targetLanguage})`);
+                    } catch (metadataError) {
+                        console.error('Failed to add metadata:', metadataError.message);
+                    }
+                    
+                    break;
                     break;
                 }
             }
