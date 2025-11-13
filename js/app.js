@@ -202,7 +202,7 @@ async function loadFiles() {
                                                     <div class="language-pill" role="listitem">
                                                         <span>${trans.language.toUpperCase()}</span>
                                                         <span class="text-white-50" style="font-size: 0.75rem;">${(trans.size / 1024).toFixed(1)} KB</span>
-                                                        <button class="pill-download-icon download-btn" 
+                                                        <button class="icon-btn download-btn" 
                                                             data-filename="${trans.fileName}" 
                                                             data-container="translated-files"
                                                             aria-label="Pobierz tłumaczenie w języku ${trans.language}"
