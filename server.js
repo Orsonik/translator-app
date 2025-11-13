@@ -135,7 +135,7 @@ async function startDocumentTranslation(sourceFileName, targetLanguage) {
         // Start translation using REST API
         const translationResponse = await axios({
             method: 'POST',
-            url: `${docTranslatorEndpoint}translator/document/batches`,
+            url: 'https://westeurope.cognitiveservices.azure.com/translator/document/batches?api-version=2024-05-01',
             headers: {
                 'Ocp-Apim-Subscription-Key': docTranslatorKey,
                 'Content-Type': 'application/json'
@@ -783,7 +783,7 @@ app.get('/api/translationStatus/:jobId', async (req, res) => {
         // Query Azure Document Translation API for status
         const statusResponse = await axios({
             method: 'GET',
-            url: `${docTranslatorEndpoint}translator/document/batches/${jobId}`,
+            url: `https://westeurope.cognitiveservices.azure.com/translator/document/batches/${jobId}?api-version=2024-05-01`,
             headers: {
                 'Ocp-Apim-Subscription-Key': docTranslatorKey
             }
