@@ -110,7 +110,7 @@ async function startDocumentTranslation(sourceFileName, targetLanguage) {
         const sourceBlobClient = sourceContainerClient.getBlobClient(sourceFileName);
         
         const docSourceContainerClient = blobServiceClient.getContainerClient('source-docs');
-        const docSourceBlobClient = docSourceContainerClient.getBlobClient(uniqueSourceFileName);
+        const docSourceBlobClient = docSourceContainerClient.getBlockBlobClient(uniqueSourceFileName);
         
         // Copy blob
         const downloadResponse = await sourceBlobClient.download();
