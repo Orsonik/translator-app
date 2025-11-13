@@ -2,7 +2,7 @@ const express = require('express');
 const path = require('path');
 const multer = require('multer');
 const { DefaultAzureCredential } = require('@azure/identity');
-const { BlobServiceClient, generateBlobSASQueryParameters, BlobSASPermissions, ContainerSASPermissions, StorageSharedKeyCredential, generateAccountSASQueryParameters, AccountSASPermissions, AccountSASResourceTypes, AccountSASServices } = require('@azure/storage-blob');
+const { BlobServiceClient, generateBlobSASQueryParameters, ContainerSASPermissions } = require('@azure/storage-blob');
 const { CosmosClient } = require('@azure/cosmos');
 const axios = require('axios');
 const mammoth = require('mammoth');
@@ -50,24 +50,16 @@ let blobServiceClient;
 let cosmosClient;
 let container;
 let documentTranslatorClient;
-let sharedKeyCredential;
 
 try {
     const credential = new DefaultAzureCredential();
     
-    // Blob Storage client
+    // Blob Storage client (with Managed Identity for User Delegation SAS)
     blobServiceClient = new BlobServiceClient(
         `https://${storageAccountName}.blob.core.windows.net`,
         credential
     );
-    
-    // Shared key credential for SAS generation
-    if (storageAccountKey) {
-        sharedKeyCredential = new StorageSharedKeyCredential(storageAccountName, storageAccountKey);
-        console.log('Storage account key credential initialized for SAS generation');
-    } else {
-        console.warn('STORAGE_ACCOUNT_KEY not set - SAS generation will not work');
-    }
+    console.log('Blob Storage client initialized with Managed Identity');
     
     // Document Translation client
     documentTranslatorClient = DocumentTranslator(
