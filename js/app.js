@@ -444,10 +444,23 @@ async function downloadFile(fileName, container) {
 }
 
 // Delete file and its translations
-async function deleteFile(fileName, displayName) {
-    if (!confirm(`Czy na pewno chcesz usunąć plik "${displayName}"?\n\nZostaną usunięte także wszystkie jego tłumaczenia.`)) {
-        return;
-    }
+let currentFileToDelete = { fileName: '', displayName: '' };
+
+// Show delete confirmation modal
+function deleteFile(fileName, displayName) {
+    currentFileToDelete = { fileName, displayName };
+    document.getElementById('deleteFileName').textContent = displayName;
+    const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
+    modal.show();
+}
+
+// Confirm deletion from modal
+async function confirmDelete() {
+    const { fileName, displayName } = currentFileToDelete;
+
+    // Close modal
+    const modal = bootstrap.Modal.getInstance(document.getElementById('deleteModal'));
+    modal.hide();
 
     try {
         console.log('Deleting file:', fileName);
@@ -470,7 +483,7 @@ async function deleteFile(fileName, displayName) {
         const result = await response.json();
         console.log('Deletion result:', result);
 
-        alert(result.message);
+        showToast('Plik został usunięty');
         
         // Reload files list
         loadFiles();

@@ -24,13 +24,13 @@
             --text-secondary: #b0b0b0;
             --text-muted: #808080;
             
-            --accent-primary: #4ecca3;
-            --accent-primary-hover: #3db88a;
+            --accent-primary: #64a19d;
+            --accent-primary-hover: #4a7c79;
             --accent-danger: #e74c3c;
             --accent-danger-hover: #c0392b;
             
             --pill-bg: #2d2d2d;
-            --pill-text: #4ecca3;
+            --pill-text: #64a19d;
             --pill-border: #3a3a3a;
             
             --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3);
@@ -785,6 +785,36 @@
                     </button>
                     <button type="button" class="btn btn-primary" onclick="confirmTranslation()">
                         <i class="fas fa-language"></i> Przetłumacz
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content bg-dark text-white">
+                <div class="modal-header border-secondary">
+                    <h5 class="modal-title" id="deleteModalLabel">
+                        <i class="fas fa-exclamation-triangle text-warning"></i> Potwierdź usunięcie
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-white mb-3">Czy na pewno chcesz usunąć plik?</p>
+                    <p class="text-white-50 mb-3">Plik: <strong id="deleteFileName"></strong></p>
+                    <div class="alert alert-warning bg-dark border-warning text-white-50" style="font-size: 0.9rem;">
+                        <i class="fas fa-info-circle"></i> 
+                        Operacja usunie oryginalny plik oraz wszystkie jego tłumaczenia.
+                    </div>
+                </div>
+                <div class="modal-footer border-secondary">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times"></i> Anuluj
+                    </button>
+                    <button type="button" class="btn btn-danger" onclick="confirmDelete()">
+                        <i class="fas fa-trash-alt"></i> Usuń
                     </button>
                 </div>
             </div>
