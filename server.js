@@ -2,7 +2,7 @@ const express = require('express');
 const path = require('path');
 const multer = require('multer');
 const { DefaultAzureCredential } = require('@azure/identity');
-const { BlobServiceClient, generateBlobSASQueryParameters, BlobSASPermissions, StorageSharedKeyCredential } = require('@azure/storage-blob');
+const { BlobServiceClient, generateBlobSASQueryParameters, BlobSASPermissions, ContainerSASPermissions, StorageSharedKeyCredential } = require('@azure/storage-blob');
 const { CosmosClient } = require('@azure/cosmos');
 const axios = require('axios');
 const mammoth = require('mammoth');
@@ -97,7 +97,7 @@ function generateContainerSasUrl(containerName, permissions = 'racwdl') {
     
     const sasToken = generateBlobSASQueryParameters({
         containerName,
-        permissions: BlobSASPermissions.parse(permissions),
+        permissions: ContainerSASPermissions.parse(permissions),
         expiresOn
     }, sharedKeyCredential).toString();
     
