@@ -217,14 +217,14 @@ async function loadFiles() {
                                     </td>
                                     <td>
                                         <div class="action-buttons">
-                                            <button class="btn-primary-custom translate-btn" 
+                                            <button class="btn btn-primary translate-btn" 
                                                 data-filename="${group.originalFile.fileName}" 
                                                 data-displayname="${group.originalFile.displayName}"
                                                 aria-label="Przetłumacz plik ${group.originalFile.displayName}">
                                                 <i class="fas fa-language" aria-hidden="true"></i>
                                                 <span>Przetłumacz</span>
                                             </button>
-                                            <button class="btn-danger-custom delete-btn" 
+                                            <button class="btn btn-danger delete-btn" 
                                                 data-filename="${group.originalFile.fileName}" 
                                                 data-displayname="${group.originalFile.displayName}"
                                                 aria-label="Usuń plik ${group.originalFile.displayName}">
