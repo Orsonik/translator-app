@@ -22,6 +22,38 @@
             padding: 30px;
             margin-bottom: 30px;
         }
+        .toast-notification {
+            background: linear-gradient(135deg, #1f1f1f 0%, #2a2a2a 100%);
+            border: 2px solid #64a19d;
+            border-radius: 15px;
+            padding: 25px 30px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+            min-width: 400px;
+            pointer-events: all;
+            animation: slideInDown 0.5s ease-out;
+        }
+        .toast-content {
+            display: flex;
+            align-items: center;
+        }
+        @keyframes slideInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-50px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        @keyframes fadeOut {
+            from {
+                opacity: 1;
+            }
+            to {
+                opacity: 0;
+            }
+        }
         .btn-translator {
             background: linear-gradient(to right, #64a19d, #4a7c79);
             border: none;
@@ -404,6 +436,19 @@
                     <button type="button" class="btn btn-primary" onclick="confirmTranslation()">
                         <i class="fas fa-language"></i> Przetłumacz
                     </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Success Toast Notification -->
+    <div class="position-fixed top-50 start-50 translate-middle" style="z-index: 9999; pointer-events: none;">
+        <div id="successToast" class="toast-notification" style="display: none;">
+            <div class="toast-content">
+                <i class="fas fa-check-circle text-success me-3" style="font-size: 2rem;"></i>
+                <div>
+                    <h5 class="text-white mb-1">Sukces!</h5>
+                    <p class="text-white-50 mb-0" id="toastMessage">Plik został przetłumaczony</p>
                 </div>
             </div>
         </div>

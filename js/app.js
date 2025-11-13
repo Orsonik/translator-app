@@ -205,13 +205,14 @@ async function loadFiles() {
                                             data-filename="${group.originalFile.fileName}" 
                                             data-displayname="${group.originalFile.displayName}" 
                                             title="Przetłumacz plik">
-                                            <i class="fas fa-language"></i>
+                                            <i class="fas fa-language me-1"></i> Przetłumacz
                                         </button>
+                                        <br>
                                         <button class="btn btn-sm btn-danger delete-btn" 
                                             data-filename="${group.originalFile.fileName}" 
                                             data-displayname="${group.originalFile.displayName}" 
                                             title="Usuń plik">
-                                            <i class="fas fa-trash"></i>
+                                            <i class="fas fa-trash me-1"></i> Usuń
                                         </button>
                                     </td>
                                 </tr>
@@ -473,7 +474,7 @@ async function confirmTranslation() {
         const result = await response.json();
         console.log('Translation result:', result);
 
-        alert(`Plik został przetłumaczony!\nJęzyk: ${result.language}\nPlik: ${result.translatedFileName}`);
+        showToast('Plik został przetłumaczony');
         
         // Reload files list to show new translation
         loadFiles();
@@ -568,6 +569,24 @@ async function deleteFile(fileName, displayName) {
 async function translateExistingFile(fileName, displayName) {
     // Redirect to new modal-based function
     showLanguageModal(fileName, displayName);
+}
+
+// Toast notification function
+function showToast(message) {
+    const toast = document.getElementById('successToast');
+    const toastMessage = document.getElementById('toastMessage');
+    
+    toastMessage.textContent = message;
+    toast.style.display = 'block';
+    
+    // Auto-hide after 3 seconds
+    setTimeout(() => {
+        toast.style.animation = 'fadeOut 0.5s ease-out';
+        setTimeout(() => {
+            toast.style.display = 'none';
+            toast.style.animation = '';
+        }, 500);
+    }, 3000);
 }
 
 // Event delegation for dynamically created buttons
