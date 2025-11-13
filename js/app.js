@@ -156,65 +156,84 @@ async function loadFiles() {
             console.log(`Displaying ${data.fileGroups.length} file groups`);
             filesList.innerHTML = `
                 <div class="table-responsive">
-                    <table class="table table-dark table-hover">
+                    <table class="files-table" role="table" aria-label="Lista przesłanych plików">
                         <thead>
                             <tr>
-                                <th style="width: 45%">Oryginalny plik</th>
-                                <th style="width: 45%">Tłumaczenia</th>
-                                <th style="width: 10%">Akcje</th>
+                                <th scope="col">Oryginalny plik</th>
+                                <th scope="col">Tłumaczenia</th>
+                                <th scope="col">Akcje</th>
                             </tr>
                         </thead>
                         <tbody>
                             ${data.fileGroups.map(group => `
                                 <tr>
                                     <td>
-                                        <div>
-                                            <i class="fas fa-file text-primary"></i> 
-                                            <strong>${group.originalFile.displayName}</strong>
-                                            <button class="btn btn-sm btn-link text-white-50 p-0 ms-2 download-btn" 
-                                                data-filename="${group.originalFile.fileName}" 
-                                                data-container="source-files" 
-                                                title="Pobierz">
-                                                <i class="fas fa-download"></i>
-                                            </button>
+                                        <div class="file-info">
+                                            <div class="file-name" title="${group.originalFile.displayName}">
+                                                <i class="fas fa-file-alt file-icon" aria-hidden="true"></i>
+                                                <span>${group.originalFile.displayName}</span>
+                                                <button class="icon-btn download-btn" 
+                                                    data-filename="${group.originalFile.fileName}" 
+                                                    data-container="source-files" 
+                                                    aria-label="Pobierz oryginalny plik ${group.originalFile.displayName}">
+                                                    <i class="fas fa-download" aria-hidden="true"></i>
+                                                </button>
+                                            </div>
+                                            <div class="file-meta">
+                                                <span>
+                                                    <i class="far fa-clock" aria-hidden="true"></i>
+                                                    ${new Date(group.originalFile.uploadDate).toLocaleString('pl-PL', { 
+                                                        year: 'numeric', 
+                                                        month: 'short', 
+                                                        day: 'numeric',
+                                                        hour: '2-digit',
+                                                        minute: '2-digit'
+                                                    })}
+                                                </span>
+                                                <span>
+                                                    <i class="far fa-file" aria-hidden="true"></i>
+                                                    ${(group.originalFile.size / 1024).toFixed(2)} KB
+                                                </span>
+                                            </div>
                                         </div>
-                                        <small class="text-white-50">
-                                            ${new Date(group.originalFile.uploadDate).toLocaleString('pl-PL')} | 
-                                            ${(group.originalFile.size / 1024).toFixed(2)} KB
-                                        </small>
                                     </td>
                                     <td>
                                         ${group.translations.length > 0 
-                                            ? group.translations.map(trans => `
-                                                <div class="mb-1 d-flex align-items-center">
-                                                    <span class="badge bg-info me-2">${trans.language.toUpperCase()}</span>
-                                                    <small class="text-white-50 flex-grow-1">${(trans.size / 1024).toFixed(2)} KB</small>
-                                                    <button class="btn btn-sm btn-link text-white-50 p-0 download-btn" 
-                                                        data-filename="${trans.fileName}" 
-                                                        data-container="translated-files" 
-                                                        title="Pobierz">
-                                                        <i class="fas fa-download"></i>
-                                                    </button>
-                                                </div>
-                                            `).join('')
-                                            : '<small class="text-white-50">Brak tłumaczeń</small>'
+                                            ? `<div class="language-pills" role="list" aria-label="Dostępne tłumaczenia">
+                                                ${group.translations.map(trans => `
+                                                    <div class="language-pill" role="listitem">
+                                                        <span>${trans.language.toUpperCase()}</span>
+                                                        <span class="text-white-50" style="font-size: 0.75rem;">${(trans.size / 1024).toFixed(1)} KB</span>
+                                                        <button class="pill-download-icon download-btn" 
+                                                            data-filename="${trans.fileName}" 
+                                                            data-container="translated-files"
+                                                            aria-label="Pobierz tłumaczenie w języku ${trans.language}"
+                                                            tabindex="0">
+                                                            <i class="fas fa-download" aria-hidden="true"></i>
+                                                        </button>
+                                                    </div>
+                                                `).join('')}
+                                            </div>`
+                                            : '<span class="text-white-50">Brak tłumaczeń</span>'
                                         }
                                     </td>
                                     <td>
-                                        <button class="btn btn-success mb-2 w-100 d-flex align-items-center justify-content-center translate-btn" 
-                                            data-filename="${group.originalFile.fileName}" 
-                                            data-displayname="${group.originalFile.displayName}" 
-                                            title="Przetłumacz plik"
-                                            style="padding: 12px 30px;">
-                                            <i class="fas fa-language me-2"></i> Przetłumacz
-                                        </button>
-                                        <button class="btn btn-danger w-100 d-flex align-items-center justify-content-center delete-btn" 
-                                            data-filename="${group.originalFile.fileName}" 
-                                            data-displayname="${group.originalFile.displayName}" 
-                                            title="Usuń plik"
-                                            style="padding: 12px 30px;">
-                                            <i class="fas fa-trash me-2"></i> Usuń
-                                        </button>
+                                        <div class="action-buttons">
+                                            <button class="btn-primary-custom translate-btn" 
+                                                data-filename="${group.originalFile.fileName}" 
+                                                data-displayname="${group.originalFile.displayName}"
+                                                aria-label="Przetłumacz plik ${group.originalFile.displayName}">
+                                                <i class="fas fa-language" aria-hidden="true"></i>
+                                                <span>Przetłumacz</span>
+                                            </button>
+                                            <button class="btn-danger-custom delete-btn" 
+                                                data-filename="${group.originalFile.fileName}" 
+                                                data-displayname="${group.originalFile.displayName}"
+                                                aria-label="Usuń plik ${group.originalFile.displayName}">
+                                                <i class="fas fa-trash-alt" aria-hidden="true"></i>
+                                                <span>Usuń</span>
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             `).join('')}
@@ -224,7 +243,13 @@ async function loadFiles() {
             `;
         } else {
             console.log('No files found, showing empty message');
-            filesList.innerHTML = '<p class="text-white-50 text-center">Brak wgranych plików</p>';
+            filesList.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-folder-open" aria-hidden="true"></i>
+                    <p class="text-white-50 mb-0">Brak wgranych plików</p>
+                    <p class="text-white-50" style="font-size: 0.9rem;">Wgraj pierwszy plik, aby rozpocząć</p>
+                </div>
+            `;
         }
 
     } catch (error) {
