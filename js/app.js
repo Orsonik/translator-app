@@ -201,18 +201,19 @@ async function loadFiles() {
                                         }
                                     </td>
                                     <td>
-                                        <button class="btn btn-sm btn-success mb-1 translate-btn" 
+                                        <button class="btn btn-success mb-2 w-100 d-flex align-items-center justify-content-center translate-btn" 
                                             data-filename="${group.originalFile.fileName}" 
                                             data-displayname="${group.originalFile.displayName}" 
-                                            title="Przetłumacz plik">
-                                            <i class="fas fa-language me-1"></i> Przetłumacz
+                                            title="Przetłumacz plik"
+                                            style="padding: 12px 30px;">
+                                            <i class="fas fa-language me-2"></i> Przetłumacz
                                         </button>
-                                        <br>
-                                        <button class="btn btn-sm btn-danger delete-btn" 
+                                        <button class="btn btn-danger w-100 d-flex align-items-center justify-content-center delete-btn" 
                                             data-filename="${group.originalFile.fileName}" 
                                             data-displayname="${group.originalFile.displayName}" 
-                                            title="Usuń plik">
-                                            <i class="fas fa-trash me-1"></i> Usuń
+                                            title="Usuń plik"
+                                            style="padding: 12px 30px;">
+                                            <i class="fas fa-trash me-2"></i> Usuń
                                         </button>
                                     </td>
                                 </tr>
