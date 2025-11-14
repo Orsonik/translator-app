@@ -524,19 +524,16 @@ app.get('/api/getFiles', async (req, res) => {
         const translatedDocsClient = blobServiceClient.getContainerClient('translated-docs');
         console.log('Listing translated docs with Managed Identity...');
         
-        for await (const blob of translatedDocsClient.listBlobsFlat({ includeMetadata: true })) {
+        for await (const blob of translatedDocsClient.listBlobsFlat()) {
             console.log('Found translated doc:', blob.name);
             
-            // Extract target language from metadata (if available)
-            const targetLanguage = blob.metadata?.targetlanguage || blob.metadata?.targetLanguage;
-            
+            // Note: We'll fetch metadata later when matching files to avoid permission issues during listing
             translatedFiles.push({
                 fileName: blob.name,
                 size: blob.properties.contentLength,
                 uploadDate: blob.properties.lastModified,
                 blobUrl: `https://${storageAccountName}.blob.core.windows.net/translated-docs/${blob.name}`,
-                metadata: blob.metadata, // Include metadata for language extraction
-                targetLanguage: targetLanguage // Pre-extract for easier access
+                needsMetadata: true // Flag to fetch metadata later if needed
             });
         }
 
@@ -580,15 +577,13 @@ app.get('/api/getFiles', async (req, res) => {
                 // Extract language from either format
                 const textMatch = tf.fileName.match(/^\d+_translated_([a-z]{2})_(.*?)\.txt$/);
                 
-                // For Document Translation API files, get language from blob metadata
+                // For Document Translation API files, use placeholder for now
+                // TODO: Implement proper language detection via blob metadata or file renaming
                 let language = 'unknown';
                 if (textMatch) {
                     language = textMatch[1];
-                } else if (tf.targetLanguage) {
-                    // Use language from metadata (set during translation success)
-                    language = tf.targetLanguage;
                 } else if (tf.blobUrl.includes('translated-docs')) {
-                    // Fallback for files without metadata
+                    // Placeholder for formatted document translations
                     language = 'docx';
                 }
                 
