@@ -887,34 +887,35 @@ app.get('/api/translationStatus/:jobId', async (req, res) => {
             // Find translated file in translated-docs container
             const translatedDocsClient = blobServiceClient.getContainerClient('translated-docs');
             
-            // Extract base name from source file to find the translated version
-            const sourceBaseName = jobInfo.sourceFileName.replace(/^\d+_/, '');
+            // Document Translation API creates translated file with same name as source-docs file
+            // e.g., source-docs/1763119170964_Cities flooded.docx -> translated-docs/1763119170964_Cities flooded.docx
+            const expectedTranslatedFileName = `${jobInfo.translatedTimestamp}_${jobInfo.displayFileName || jobInfo.sourceFileName.replace(/^\d+_/, '')}`;
             
-            for await (const blob of translatedDocsClient.listBlobsFlat()) {
-                const translatedBaseName = blob.name.replace(/^\d+_/, '');
+            console.log(`Looking for translated file: ${expectedTranslatedFileName}`);
+            
+            // Check if the expected file exists
+            const blobClient = translatedDocsClient.getBlobClient(expectedTranslatedFileName);
+            const exists = await blobClient.exists();
+            
+            if (exists) {
+                jobInfo.translatedFileName = expectedTranslatedFileName;
+                jobInfo.translatedBlobUrl = `https://${storageAccountName}.blob.core.windows.net/translated-docs/${expectedTranslatedFileName}`;
                 
-                // Match by base name (without timestamp)
-                if (translatedBaseName === sourceBaseName) {
-                    jobInfo.translatedFileName = blob.name;
-                    jobInfo.translatedBlobUrl = `https://${storageAccountName}.blob.core.windows.net/translated-docs/${blob.name}`;
-                    
-                    // Add metadata with target language and source timestamp to the blob
-                    try {
-                        const blobClient = translatedDocsClient.getBlobClient(blob.name);
-                        await blobClient.setMetadata({
-                            targetLanguage: jobInfo.targetLanguage,
-                            sourceFileName: jobInfo.sourceFileName,
-                            sourceTimestamp: jobInfo.sourceTimestamp, // Original source file timestamp
-                            translatedTimestamp: jobInfo.translatedTimestamp.toString(), // Translation job timestamp
-                            translatedAt: new Date().toISOString()
-                        });
-                        console.log(`Added metadata to translated file: ${blob.name} (language: ${jobInfo.targetLanguage}, sourceTimestamp: ${jobInfo.sourceTimestamp})`);
-                    } catch (metadataError) {
-                        console.error('Failed to add metadata:', metadataError.message);
-                    }
-                    
-                    break;
+                // Add metadata with target language and source timestamp to the blob
+                try {
+                    await blobClient.setMetadata({
+                        targetLanguage: jobInfo.targetLanguage,
+                        sourceFileName: jobInfo.sourceFileName,
+                        sourceTimestamp: jobInfo.sourceTimestamp, // Original source file timestamp
+                        translatedTimestamp: jobInfo.translatedTimestamp.toString(), // Translation job timestamp
+                        translatedAt: new Date().toISOString()
+                    });
+                    console.log(`Added metadata to translated file: ${expectedTranslatedFileName} (language: ${jobInfo.targetLanguage}, sourceTimestamp: ${jobInfo.sourceTimestamp})`);
+                } catch (metadataError) {
+                    console.error('Failed to add metadata:', metadataError.message);
                 }
+            } else {
+                console.error(`Expected translated file not found: ${expectedTranslatedFileName}`);
             }
 
             // Save to Cosmos DB for history
