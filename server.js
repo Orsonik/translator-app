@@ -792,22 +792,26 @@ app.post('/api/translateExistingFile', async (req, res) => {
         console.log('Translated file saved:', translatedFileName);
 
         // Save to Cosmos DB
-        const translationRecord = {
-            id: `file_${timestamp}`,
-            type: 'file',
-            originalFileName: originalFileName,
-            translatedFileName: translatedFileName,
-            sourceLanguage: 'auto',
-            targetLanguage: targetLanguage,
-            originalSize: fileData.length,
-            translatedSize: translatedBuffer.length,
-            textLength: textToTranslate.length,
-            fileType: fileExtension,
-            timestamp: new Date().toISOString()
-        };
+        try {
+            const translationRecord = {
+                id: `file_${timestamp}`,
+                type: 'file',
+                originalFileName: originalFileName,
+                translatedFileName: translatedFileName,
+                sourceLanguage: 'auto',
+                targetLanguage: targetLanguage,
+                originalSize: fileData.length,
+                translatedSize: translatedBuffer.length,
+                textLength: textToTranslate.length,
+                fileType: fileExtension,
+                timestamp: new Date().toISOString()
+            };
 
-        await container.items.create(translationRecord);
-        console.log('File translation record saved to Cosmos DB');
+            await container.items.create(translationRecord);
+            console.log('File translation record saved to Cosmos DB');
+        } catch (cosmosError) {
+            console.error('Failed to save to Cosmos DB (non-critical):', cosmosError.message);
+        }
 
         res.json({ 
             success: true,
