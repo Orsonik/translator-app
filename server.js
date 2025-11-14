@@ -106,7 +106,25 @@ async function generateContainerSasUrl(containerName, permissions = 'racwdl') {
 async function startDocumentTranslation(sourceFileName, targetLanguage) {
     try {
         const timestamp = Date.now();
-        const uniqueSourceFileName = `${timestamp}_${sourceFileName}`;
+        
+        // Extract source timestamp and base name from original file
+        const sourceTimestampMatch = sourceFileName.match(/^(\d+)_(.*)/);
+        let sourceTimestamp;
+        let baseFileName;
+        
+        if (sourceTimestampMatch) {
+            // File already has timestamp (e.g., "1763116384106_Cities flooded.docx")
+            sourceTimestamp = sourceTimestampMatch[1];
+            baseFileName = sourceTimestampMatch[2]; // "Cities flooded.docx"
+        } else {
+            // File has no timestamp (shouldn't happen in normal flow)
+            sourceTimestamp = timestamp.toString();
+            baseFileName = sourceFileName;
+        }
+        
+        // Create unique name for source-docs using NEW timestamp + base name
+        // This ensures each translation job has unique source file
+        const uniqueSourceFileName = `${timestamp}_${baseFileName}`;
         
         // Copy file from source-files to source-docs container
         const sourceContainerClient = blobServiceClient.getContainerClient('source-files');
@@ -162,6 +180,8 @@ async function startDocumentTranslation(sourceFileName, targetLanguage) {
         return {
             jobId,
             sourceFileName: uniqueSourceFileName,
+            sourceTimestamp: sourceTimestamp, // Store SOURCE timestamp for matching
+            translatedTimestamp: timestamp, // Store translation timestamp
             targetLanguage
         };
         
@@ -559,20 +579,25 @@ app.get('/api/getFiles', async (req, res) => {
                     return baseName === baseOriginalName;
                 }
                 
-                // Format 2: Document Translation API - same name as source (timestamp_originalname.extension)
-                // These files are in translated-docs container with same name as source
-                // We need to match by checking if it's NOT the exact source file AND has same base name
+                // Format 2: Document Translation API - match by source timestamp in metadata
+                // Document Translation creates files with format: {timestamp}_{originalname}.{ext}
+                // We store the ORIGINAL SOURCE timestamp in blob metadata during translation
                 if (tf.blobUrl.includes('translated-docs')) {
-                    // Extract timestamp from both files to compare base names
+                    // Extract timestamp from source file
                     const sourceTimestamp = sourceFile.fileName.match(/^(\d+)_/)?.[1];
-                    const translatedTimestamp = tf.fileName.match(/^(\d+)_/)?.[1];
                     
-                    // Different timestamp = different upload, likely a translation
-                    // OR: Check if source file timestamp exists in translated file name but in different container
-                    const sourceBaseName = sourceFile.fileName.replace(/^\d+_/, '');
-                    const translatedBaseName = tf.fileName.replace(/^\d+_/, '');
+                    // Check metadata for sourceTimestamp (should match the source file)
+                    const metadataSourceTimestamp = tf.metadata?.sourcetimestamp || tf.metadata?.sourceTimestamp;
                     
-                    return translatedBaseName === sourceBaseName && sourceTimestamp !== translatedTimestamp;
+                    // Match if metadata source timestamp matches this source file's timestamp
+                    if (metadataSourceTimestamp && metadataSourceTimestamp === sourceTimestamp) {
+                        // Also verify base names match for safety
+                        const sourceBaseName = sourceFile.fileName.replace(/^\d+_/, '');
+                        const translatedBaseName = tf.fileName.replace(/^\d+_/, '');
+                        return translatedBaseName === sourceBaseName;
+                    }
+                    
+                    return false;
                 }
                 
                 return false;
@@ -665,6 +690,8 @@ app.post('/api/translateExistingFile', async (req, res) => {
                 sourceFileName: fileName,
                 displayFileName: originalFileName,
                 targetLanguage: targetLanguage,
+                sourceTimestamp: jobInfo.sourceTimestamp, // Original source file timestamp
+                translatedTimestamp: jobInfo.translatedTimestamp, // Translation job timestamp
                 status: 'NotStarted',
                 createdAt: new Date().toISOString()
             });
@@ -877,22 +904,42 @@ app.get('/api/translationStatus/:jobId', async (req, res) => {
                     jobInfo.translatedFileName = blob.name;
                     jobInfo.translatedBlobUrl = `https://${storageAccountName}.blob.core.windows.net/translated-docs/${blob.name}`;
                     
-                    // Add metadata with target language to the blob
+                    // Add metadata with target language and source timestamp to the blob
                     try {
                         const blobClient = translatedDocsClient.getBlobClient(blob.name);
                         await blobClient.setMetadata({
                             targetLanguage: jobInfo.targetLanguage,
                             sourceFileName: jobInfo.sourceFileName,
+                            sourceTimestamp: jobInfo.sourceTimestamp, // Original source file timestamp
+                            translatedTimestamp: jobInfo.translatedTimestamp.toString(), // Translation job timestamp
                             translatedAt: new Date().toISOString()
                         });
-                        console.log(`Added metadata to translated file: ${blob.name} (language: ${jobInfo.targetLanguage})`);
+                        console.log(`Added metadata to translated file: ${blob.name} (language: ${jobInfo.targetLanguage}, sourceTimestamp: ${jobInfo.sourceTimestamp})`);
                     } catch (metadataError) {
                         console.error('Failed to add metadata:', metadataError.message);
                     }
                     
                     break;
-                    break;
                 }
+            }
+
+            // Save to Cosmos DB for history
+            try {
+                const translationRecord = {
+                    id: `docx_${jobInfo.translatedTimestamp}`,
+                    type: 'file',
+                    originalFileName: jobInfo.displayFileName || jobInfo.sourceFileName,
+                    translatedFileName: jobInfo.translatedFileName,
+                    sourceLanguage: 'auto',
+                    targetLanguage: jobInfo.targetLanguage,
+                    timestamp: new Date().toISOString(),
+                    translationMethod: 'document-api' // Flag to distinguish from text-based
+                };
+
+                await container.items.create(translationRecord);
+                console.log('Document translation record saved to Cosmos DB');
+            } catch (cosmosError) {
+                console.error('Failed to save to Cosmos DB (non-critical):', cosmosError.message);
             }
 
             return res.json({
