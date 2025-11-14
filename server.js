@@ -579,22 +579,16 @@ app.get('/api/getFiles', async (req, res) => {
                     return baseName === baseOriginalName;
                 }
                 
-                // Format 2: Document Translation API - match by source timestamp in metadata
+                // Format 2: Document Translation API - match by source file name in metadata
                 // Document Translation creates files with format: {timestamp}_{originalname}.{ext}
-                // We store the ORIGINAL SOURCE timestamp in blob metadata during translation
+                // We store the source file name in blob metadata during translation
                 if (tf.blobUrl.includes('translated-docs')) {
-                    // Extract timestamp from source file
-                    const sourceTimestamp = sourceFile.fileName.match(/^(\d+)_/)?.[1];
+                    // Get source file name from metadata
+                    const metadataSourceFileName = tf.metadata?.sourcefilename || tf.metadata?.sourceFileName;
                     
-                    // Check metadata for sourceTimestamp (should match the source file)
-                    const metadataSourceTimestamp = tf.metadata?.sourcetimestamp || tf.metadata?.sourceTimestamp;
-                    
-                    // Match if metadata source timestamp matches this source file's timestamp
-                    if (metadataSourceTimestamp && metadataSourceTimestamp === sourceTimestamp) {
-                        // Also verify base names match for safety
-                        const sourceBaseName = sourceFile.fileName.replace(/^\d+_/, '');
-                        const translatedBaseName = tf.fileName.replace(/^\d+_/, '');
-                        return translatedBaseName === sourceBaseName;
+                    // Match if metadata source file name matches this source file
+                    if (metadataSourceFileName && metadataSourceFileName === sourceFile.fileName) {
+                        return true;
                     }
                     
                     return false;
