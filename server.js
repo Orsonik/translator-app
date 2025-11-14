@@ -592,12 +592,17 @@ app.get('/api/getFiles', async (req, res) => {
                     language = 'docx';
                 }
                 
+                // Extract container name from blobUrl for download
+                const containerMatch = tf.blobUrl.match(/\.net\/([^\/]+)\//);
+                const container = containerMatch ? containerMatch[1] : 'translated-files';
+                
                 return {
                     fileName: tf.fileName,
                     language: language,
                     size: tf.size,
                     uploadDate: tf.uploadDate,
-                    blobUrl: tf.blobUrl
+                    blobUrl: tf.blobUrl,
+                    container: container // Add container info for frontend
                 };
             });
 

@@ -204,7 +204,7 @@ async function loadFiles() {
                                                         <span class="text-white-50" style="font-size: 0.75rem;">${(trans.size / 1024).toFixed(1)} KB</span>
                                                         <button class="icon-btn download-btn" 
                                                             data-filename="${trans.fileName}" 
-                                                            data-container="translated-files"
+                                                            data-container="${trans.container || 'translated-files'}"
                                                             aria-label="Pobierz tłumaczenie w języku ${trans.language}"
                                                             tabindex="0">
                                                             <i class="fas fa-download" aria-hidden="true"></i>
