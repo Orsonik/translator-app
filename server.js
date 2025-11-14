@@ -1076,6 +1076,33 @@ app.delete('/api/deleteFile', async (req, res) => {
         const totalDeleted = deletedTextTranslations + deletedDocTranslations;
         console.log(`Deleted ${deletedTextTranslations} text translations and ${deletedDocTranslations} DOCX translations`);
 
+        // Delete related records from Cosmos DB
+        let deletedCosmosRecords = 0;
+        try {
+            const { resources: allRecords } = await container.items
+                .query({
+                    query: "SELECT * FROM c WHERE c.type = 'file'"
+                })
+                .fetchAll();
+
+            for (const record of allRecords) {
+                // Match by original filename (without timestamp)
+                if (record.originalFileName) {
+                    const recordMatch = record.originalFileName.match(/^\d+_(.*)/);
+                    const recordBaseName = recordMatch ? recordMatch[1].replace(/\.[^/.]+$/, '') : '';
+                    
+                    if (recordBaseName === baseOriginalName) {
+                        await container.item(record.id, record.id).delete();
+                        deletedCosmosRecords++;
+                        console.log('Deleted Cosmos DB record:', record.id);
+                    }
+                }
+            }
+            console.log(`Deleted ${deletedCosmosRecords} records from Cosmos DB`);
+        } catch (cosmosError) {
+            console.error('Failed to delete from Cosmos DB (non-critical):', cosmosError.message);
+        }
+
         res.json({ 
             success: true,
             message: `File deleted successfully along with ${totalDeleted} translation(s)`
