@@ -1022,40 +1022,63 @@ app.delete('/api/deleteFile', async (req, res) => {
 
         console.log('Deleting file:', fileName);
 
+        // Extract original filename without timestamp for matching
+        const match = fileName.match(/^\d+_(.*)/);
+        const originalName = match ? match[1] : fileName;
+        const baseOriginalName = originalName.replace(/\.[^/.]+$/, ''); // Remove extension
+
         // Delete original file from source-files
         const sourceContainerClient = blobServiceClient.getContainerClient(containerName);
         const sourceBlobClient = sourceContainerClient.getBlobClient(fileName);
         await sourceBlobClient.deleteIfExists();
-        console.log('Deleted original file:', fileName);
+        console.log('Deleted original file from source-files:', fileName);
 
-        // Find and delete all translations
+        // Delete from source-docs (Document Translation input)
+        const sourceDocsClient = blobServiceClient.getContainerClient('source-docs');
+        const sourceDocsBlobClient = sourceDocsClient.getBlobClient(fileName);
+        await sourceDocsBlobClient.deleteIfExists();
+        console.log('Deleted from source-docs:', fileName);
+
+        // Delete text translations from translated-files
         const translatedContainerClient = blobServiceClient.getContainerClient('translated-files');
-        
-        // Extract original filename without timestamp
-        const match = fileName.match(/^\d+_(.*)/);
-        const originalName = match ? match[1] : fileName;
-        const baseOriginalName = originalName.replace(/\.[^/.]+$/, ''); // Remove extension
-        
-        let deletedTranslations = 0;
+        let deletedTextTranslations = 0;
         for await (const blob of translatedContainerClient.listBlobsFlat()) {
-            // Check if this translation belongs to the deleted file
             const translatedMatch = blob.name.match(/^\d+_translated_([a-z]{2})_(.*?)\.txt$/);
             if (translatedMatch) {
                 const [, language, baseName] = translatedMatch;
                 if (baseName === baseOriginalName) {
                     const translatedBlobClient = translatedContainerClient.getBlobClient(blob.name);
                     await translatedBlobClient.deleteIfExists();
-                    deletedTranslations++;
-                    console.log('Deleted translation:', blob.name);
+                    deletedTextTranslations++;
+                    console.log('Deleted text translation:', blob.name);
                 }
             }
         }
 
-        console.log(`Deleted ${deletedTranslations} translations`);
+        // Delete DOCX translations from translated-docs
+        const translatedDocsClient = blobServiceClient.getContainerClient('translated-docs');
+        let deletedDocTranslations = 0;
+        for await (const blob of translatedDocsClient.listBlobsFlat()) {
+            // Match files with same base name but different timestamp
+            const docMatch = blob.name.match(/^\d+_(.*)/);
+            if (docMatch) {
+                const docOriginalName = docMatch[1];
+                const docBaseName = docOriginalName.replace(/\.[^/.]+$/, '');
+                if (docBaseName === baseOriginalName) {
+                    const translatedDocBlobClient = translatedDocsClient.getBlobClient(blob.name);
+                    await translatedDocBlobClient.deleteIfExists();
+                    deletedDocTranslations++;
+                    console.log('Deleted DOCX translation:', blob.name);
+                }
+            }
+        }
+
+        const totalDeleted = deletedTextTranslations + deletedDocTranslations;
+        console.log(`Deleted ${deletedTextTranslations} text translations and ${deletedDocTranslations} DOCX translations`);
 
         res.json({ 
             success: true,
-            message: `File deleted successfully along with ${deletedTranslations} translation(s)`
+            message: `File deleted successfully along with ${totalDeleted} translation(s)`
         });
 
     } catch (error) {
